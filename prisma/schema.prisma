@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Department {
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  name String
+}
+
+// Números de chip do aparelho — embutido no Phone, sem coleção própria.
+type PhoneChip {
+  id      String
+  label   String
+  number  String
+  carrier String?
+}
+
+// Número extra do celular (não ligado a nenhum chip físico), cadastrado só
+// pra poder ser escolhido como número do WhatsApp Normal/Business.
+type ExtraNumber {
+  id     String
+  label  String
+  number String
+}
+
+// Guarda o id de um PhoneChip ou de um ExtraNumber (o pool de números
+// selecionáveis pro WhatsApp é a união dos dois).
+type WhatsAppAssignments {
+  normal   String?
+  business String?
+}
+
+model Phone {
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  model        String
+  chips        PhoneChip[]
+  extraNumbers ExtraNumber[]
+  whatsapp     WhatsAppAssignments
+  caseColor    String?
+  departmentId String?       @db.ObjectId
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
