@@ -6,12 +6,12 @@
       "locked": true,
       "columns": 3,
       "rows": 7,
-      "marginTopCm": 2,
-      "marginRightCm": 2,
-      "marginBottomCm": 2,
-      "marginLeftCm": 2,
-      "gapRowCm": 0.5,
-      "gapColCm": 0.5
+      "marginTopCm": 1.5,
+      "marginRightCm": 0.8,
+      "marginBottomCm": 1.5,
+      "marginLeftCm": 0.8,
+      "gapRowCm": 0,
+      "gapColCm": 0.2
     }
   ]
 }
