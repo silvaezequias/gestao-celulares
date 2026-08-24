@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Smartphone, X, Trash2, Search, Tags } from 'lucide-react';
+import { Plus, Smartphone, X, Trash2, Search, Tags, CardSim } from 'lucide-react';
 import { usePhones } from '../../lib/phones/storage';
 import { Department, Phone, PhoneDraft } from '../../lib/phones/types';
 import { numberMatchesQuery } from '../../lib/phones/search';
@@ -93,6 +93,13 @@ export const PhonesView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/chips"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer"
+          >
+            <CardSim className="w-4 h-4" />
+            Chips
+          </Link>
           <Link
             href="/etiquetas"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer"
