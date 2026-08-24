@@ -19,13 +19,16 @@ interface MarginGuidesProps {
   onChange: (edge: MarginEdge, valueCm: number) => void;
   min: number;
   max: number;
+  locked?: boolean;
 }
 
 // Guias azuis arrastáveis sobre a própria folha (como réguas de layout em
 // editores gráficos) — arrasta a linha pra dentro/fora pra ajustar a margem
-// daquele lado. Só o espaçamento entre etiquetas continua sendo um slider.
-export const MarginGuides: React.FC<MarginGuidesProps> = ({ pageRef, margins, onChange, min, max }) => {
+// daquele lado. Quando "locked" (preset de medida fixa ativo), as guias
+// ficam só decorativas, sem poder arrastar.
+export const MarginGuides: React.FC<MarginGuidesProps> = ({ pageRef, margins, onChange, min, max, locked }) => {
   const startDrag = (edge: MarginEdge) => (e: React.PointerEvent) => {
+    if (locked) return;
     e.preventDefault();
     e.stopPropagation();
     const page = pageRef.current;
@@ -51,7 +54,7 @@ export const MarginGuides: React.FC<MarginGuidesProps> = ({ pageRef, margins, on
   };
 
   return (
-    <div className="no-print margin-guides">
+    <div className={`no-print margin-guides ${locked ? 'margin-guides-locked' : ''}`}>
       <div
         className="margin-guide margin-guide-h"
         style={{ top: `${(margins.top / PAGE_HEIGHT_CM) * 100}%` }}

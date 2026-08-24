@@ -30,8 +30,16 @@ export const PhonesView: React.FC = () => {
   }, [departments]);
 
   const filteredPhones = useMemo(() => {
-    if (!searchQuery.trim()) return phones;
-    return phones.filter((p) => p.chips.some((c) => numberMatchesQuery(c.number, searchQuery)));
+    const query = searchQuery.trim();
+    if (!query) return phones;
+    const lowerQuery = query.toLowerCase();
+    return phones.filter(
+      (p) =>
+        p.chips.some((c) => numberMatchesQuery(c.number, query)) ||
+        p.extraNumbers.some((e) => numberMatchesQuery(e.number, query)) ||
+        p.name.toLowerCase().includes(lowerQuery) ||
+        p.model.toLowerCase().includes(lowerQuery)
+    );
   }, [phones, searchQuery]);
 
   const hasUnassigned = filteredPhones.some((p) => !p.departmentId || !departmentById.has(p.departmentId));
@@ -120,10 +128,10 @@ export const PhonesView: React.FC = () => {
       <div className="relative mt-4 mb-6 max-w-md">
         <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         <input
-          type="tel"
+          type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Buscar por número (ex: só os 4 últimos dígitos)"
+          placeholder="Buscar por número, nome ou modelo do celular"
           className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
         />
         {searchQuery && (
@@ -252,7 +260,7 @@ export const PhonesView: React.FC = () => {
       ) : filteredPhones.length === 0 ? (
         <div className="text-center py-20 rounded-2xl border border-dashed border-slate-200">
           <Search className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 text-sm">Nenhum número encontrado para &quot;{searchQuery}&quot;.</p>
+          <p className="text-slate-500 text-sm">Nenhum celular encontrado para &quot;{searchQuery}&quot;.</p>
         </div>
       ) : (
         <div className="space-y-10">

@@ -9,6 +9,7 @@ interface RulerSliderProps {
   max: number;
   step: number;
   unit?: string;
+  disabled?: boolean;
   onChange: (value: number) => void;
 }
 
@@ -21,6 +22,7 @@ export const RulerSlider: React.FC<RulerSliderProps> = ({
   max,
   step,
   unit = 'cm',
+  disabled,
   onChange,
 }) => {
   const ticks = useMemo(() => {
@@ -35,7 +37,7 @@ export const RulerSlider: React.FC<RulerSliderProps> = ({
   }, [min, max, step]);
 
   return (
-    <div className="flex flex-col gap-1 w-full max-w-[200px]">
+    <div className={`flex flex-col gap-1 w-full max-w-[200px] ${disabled ? 'opacity-40' : ''}`}>
       <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
         <span>{label}</span>
         <span className="font-mono text-slate-900 font-bold text-xs">
@@ -58,8 +60,9 @@ export const RulerSlider: React.FC<RulerSliderProps> = ({
           max={max}
           step={step}
           value={value}
+          disabled={disabled}
           onChange={(e) => onChange(parseFloat(e.target.value))}
-          className="ruler-range absolute inset-0 w-full"
+          className="ruler-range absolute inset-0 w-full disabled:cursor-not-allowed"
           aria-label={label}
         />
       </div>
