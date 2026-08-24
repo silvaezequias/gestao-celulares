@@ -410,6 +410,10 @@ export const LabelsView: React.FC = () => {
             padding: 0 !important;
             width: 210mm;
           }
+          .labels-viewport {
+            padding: 0 !important;
+            margin: 0 !important;
+          }
           .a4-frame {
             width: 210mm !important;
             height: 297mm !important;
@@ -585,7 +589,7 @@ export const LabelsView: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="pb-10 pt-6" ref={viewportRef}>
+        <div className="labels-viewport pb-10 pt-6" ref={viewportRef}>
           {pages.map((pagePhones, pageIndex) => (
             <div
               className="a4-frame"

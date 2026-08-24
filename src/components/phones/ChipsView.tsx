@@ -2,13 +2,13 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Search, X, CardSim, ArrowLeftRight, Building2 } from 'lucide-react';
+import { ArrowLeft, Search, X, CardSim, ArrowLeftRight } from 'lucide-react';
 import { usePhones } from '../../lib/phones/storage';
 import { Department } from '../../lib/phones/types';
 import { numberMatchesQuery, findMatchRange } from '../../lib/phones/search';
 import { formatPhoneNumber } from '../../lib/phones/format';
 import { buildNumberIndex, listAllChips, findOtherOccurrences, ChipEntry } from '../../lib/phones/crossref';
-import { PhoneMockup } from './PhoneMockup';
+import { ChipMiniature } from './ChipMiniature';
 import { ChipDetailModal } from './ChipDetailModal';
 
 function renderHighlighted(text: string, query?: string) {
@@ -102,9 +102,6 @@ export const ChipsView: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {filteredChips.map((entry) => {
-            const departmentName = entry.phone.departmentId
-              ? departmentById.get(entry.phone.departmentId)?.name
-              : undefined;
             const crossRefCount = findOtherOccurrences(numberIndex, entry.chip.number, entry.chip.id).length;
 
             return (
@@ -113,29 +110,11 @@ export const ChipsView: React.FC = () => {
                 onClick={() => setSelected(entry)}
                 className="text-left flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-pointer"
               >
-                <PhoneMockup
-                  model={entry.phone.model}
-                  seedKey={`${entry.phone.name}-${entry.phone.model}`}
-                  caseColor={entry.phone.caseColor}
-                  view="front"
-                  size={44}
-                  className="shrink-0"
-                />
+                <ChipMiniature size={40} className="shrink-0" />
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-bold text-slate-900 truncate">{entry.phone.name}</p>
-                    {departmentName && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[10px] font-medium shrink-0">
-                        <Building2 className="w-2.5 h-2.5" />
-                        {departmentName}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1">
-                    {entry.chip.label}
-                  </p>
-                  <p className="text-base font-bold text-slate-900 font-mono tracking-tight">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{entry.chip.label}</p>
+                  <p className="text-xl font-bold text-slate-900 font-mono tracking-tight">
                     {renderHighlighted(formatPhoneNumber(entry.chip.number), searchQuery)}
                   </p>
 
