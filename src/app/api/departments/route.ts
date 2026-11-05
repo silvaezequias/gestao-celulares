@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '../../../lib/prisma';
+import { createDepartment, getAppData, invalidate } from '../../../lib/server/repo';
 
 export async function GET() {
-  const departments = await prisma.department.findMany();
+  const { departments } = await getAppData();
   return NextResponse.json(departments);
 }
 
@@ -12,14 +12,7 @@ export async function POST(request: Request) {
   if (!trimmed) {
     return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 });
   }
-
-  const existing = await prisma.department.findFirst({
-    where: { name: { equals: trimmed, mode: 'insensitive' } },
-  });
-  if (existing) {
-    return NextResponse.json(existing);
-  }
-
-  const department = await prisma.department.create({ data: { name: trimmed } });
+  const department = await createDepartment(trimmed);
+  invalidate();
   return NextResponse.json(department);
 }

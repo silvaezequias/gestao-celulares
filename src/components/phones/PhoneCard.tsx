@@ -1,140 +1,80 @@
 'use client';
 
-import React from 'react';
-import { Pencil, Trash2, Building2 } from 'lucide-react';
+import React, { memo } from 'react';
 import { Phone } from '../../lib/phones/types';
-import { PhoneMockup } from './PhoneMockup';
-import { findMatchRange } from '../../lib/phones/search';
 import { formatPhoneNumber } from '../../lib/phones/format';
+import { DevicePair } from '../device/DeviceThumb';
+import { Highlight, WaBadge } from '../ui/bits';
 
-interface PhoneCardProps {
-  phone: Phone;
-  departmentName?: string;
-  searchQuery?: string;
-  onEdit: () => void;
-  onDelete: () => void;
-}
-
-function renderHighlighted(text: string, query?: string) {
-  const range = query ? findMatchRange(text, query) : null;
-  if (!range) return text;
-  const [start, end] = range;
-  return (
-    <>
-      {text.slice(0, start)}
-      <mark className="bg-amber-200 text-slate-900 rounded-sm">{text.slice(start, end)}</mark>
-      {text.slice(end)}
-    </>
-  );
-}
-
-interface NumberRowProps {
+export interface NumberEntry {
+  id: string;
   label: string;
   number: string;
   isNormal: boolean;
   isBusiness: boolean;
-  searchQuery?: string;
+  extra: boolean;
 }
 
-const NumberRow: React.FC<NumberRowProps> = ({ label, number, isNormal, isBusiness, searchQuery }) => (
-  <div className="flex items-center gap-2 rounded-lg bg-slate-50 border border-slate-100 pl-2.5 pr-2 py-1.5">
-    <span className="text-[9px] font-bold text-slate-400 uppercase shrink-0 w-9 truncate">{label}</span>
-    <span className="text-sm font-bold text-slate-900 font-mono tracking-tight flex-1 min-w-0 whitespace-nowrap">
-      {renderHighlighted(formatPhoneNumber(number), searchQuery)}
-    </span>
-    {(isNormal || isBusiness) && (
-      <div className="flex gap-1 shrink-0">
-        {isNormal && (
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold whitespace-nowrap">
-            WhatsApp
-          </span>
-        )}
-        {isBusiness && (
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700 text-[10px] font-bold whitespace-nowrap">
-            Business
-          </span>
-        )}
-      </div>
-    )}
-  </div>
-);
+export function phoneNumbers(phone: Phone): NumberEntry[] {
+  return [
+    ...phone.chips
+      .filter((c) => c.number.trim())
+      .map((c) => ({ id: c.id, label: c.label || 'Chip', number: c.number, extra: false })),
+    ...phone.extraNumbers
+      .filter((e) => e.number.trim())
+      .map((e) => ({ id: e.id, label: e.label || 'Extra', number: e.number, extra: true })),
+  ].map((n) => ({ ...n, isNormal: phone.whatsapp.normal === n.id, isBusiness: phone.whatsapp.business === n.id }));
+}
 
-export const PhoneCard: React.FC<PhoneCardProps> = ({ phone, departmentName, searchQuery, onEdit, onDelete }) => {
+export const PhoneCard = memo(function PhoneCard({
+  phone,
+  departmentName,
+  query,
+  onOpen,
+}: {
+  phone: Phone;
+  departmentName?: string;
+  query?: string;
+  onOpen: (phone: Phone) => void;
+}) {
+  const numbers = phoneNumbers(phone);
+
   return (
-    <div className="group relative rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-200">
-      <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={onEdit}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-          aria-label="Editar"
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-          aria-label="Excluir"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+    <button
+      onClick={() => onOpen(phone)}
+      className="group flex w-full gap-3.5 rounded-[20px] bg-white p-3 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-zinc-200/70 transition hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] hover:ring-zinc-300 active:scale-[0.99]"
+    >
+      <div className="grid w-[76px] shrink-0 place-items-center rounded-2xl bg-gradient-to-b from-zinc-50 to-zinc-100/80 py-2.5 ring-1 ring-inset ring-zinc-100">
+        <DevicePair model={phone.model} seed={`${phone.name}-${phone.model}`} caseColor={phone.caseColor} width={34} />
       </div>
 
-      <div className="flex gap-3">
-        <div className="flex gap-1 shrink-0">
-          <PhoneMockup
-            model={phone.model}
-            seedKey={`${phone.name}-${phone.model}`}
-            caseColor={phone.caseColor}
-            view="front"
-            size={52}
-          />
-          <PhoneMockup
-            model={phone.model}
-            seedKey={`${phone.name}-${phone.model}`}
-            caseColor={phone.caseColor}
-            view="back"
-            size={52}
-          />
-        </div>
+      <div className="min-w-0 flex-1 py-0.5">
+        <p className="truncate text-[15px] font-semibold tracking-tight text-zinc-900">
+          {phone.name}
+        </p>
+        <p className="truncate text-xs text-zinc-500">
+          {phone.model || 'Modelo não informado'}
+          {departmentName && <span className="text-zinc-400"> · {departmentName}</span>}
+        </p>
 
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-slate-900 text-sm truncate">{phone.name}</h3>
-          <p className="text-xs text-slate-400 truncate">{phone.model}</p>
-          {departmentName && (
-            <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[10px] font-medium">
-              <Building2 className="w-2.5 h-2.5" />
-              {departmentName}
-            </span>
-          )}
+        <div className="mt-2.5 space-y-1">
+          {numbers.length === 0 && <p className="text-xs italic text-zinc-400">Sem números</p>}
+          {numbers.map((n) => (
+            <div key={n.id} className="flex min-w-0 items-center gap-2">
+              <span className="w-11 shrink-0 truncate text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                {n.label}
+              </span>
+              <span className="truncate font-mono text-[13.5px] font-semibold tracking-tight text-zinc-800">
+                <Highlight text={formatPhoneNumber(n.number)} query={query} />
+              </span>
+              <span className="ml-auto flex shrink-0 gap-1">
+                {n.isNormal && <WaBadge kind="normal" />}
+                {n.isBusiness && <WaBadge kind="business" />}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
-
-      <div className="mt-3 space-y-1.5">
-        {phone.chips
-          .filter((c) => c.number.trim())
-          .map((chip) => (
-            <NumberRow
-              key={chip.id}
-              label={chip.label}
-              number={chip.number}
-              isNormal={phone.whatsapp.normal === chip.id}
-              isBusiness={phone.whatsapp.business === chip.id}
-              searchQuery={searchQuery}
-            />
-          ))}
-        {phone.extraNumbers
-          .filter((e) => e.number.trim())
-          .map((extra) => (
-            <NumberRow
-              key={extra.id}
-              label={extra.label || 'Extra'}
-              number={extra.number}
-              isNormal={phone.whatsapp.normal === extra.id}
-              isBusiness={phone.whatsapp.business === extra.id}
-              searchQuery={searchQuery}
-            />
-          ))}
-      </div>
-    </div>
+    </button>
   );
-};
+});

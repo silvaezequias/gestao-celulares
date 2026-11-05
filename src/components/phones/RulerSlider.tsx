@@ -38,19 +38,19 @@ export const RulerSlider: React.FC<RulerSliderProps> = ({
 
   return (
     <div className={`flex flex-col gap-1 w-full max-w-[200px] ${disabled ? 'opacity-40' : ''}`}>
-      <div className="flex items-center justify-between text-[11px] font-medium text-slate-500">
+      <div className="flex items-center justify-between text-[11px] font-medium text-zinc-500">
         <span>{label}</span>
-        <span className="font-mono text-slate-900 font-bold text-xs">
+        <span className="font-mono text-zinc-900 font-bold text-xs">
           {value.toFixed(1)}
           {unit}
         </span>
       </div>
       <div className="ruler-wrap relative h-7">
-        <div className="absolute inset-x-0 top-3.5 h-px bg-slate-200" />
+        <div className="absolute inset-x-0 top-3.5 h-px bg-zinc-200" />
         {ticks.map((tick) => (
           <div
             key={tick.value}
-            className={`absolute bottom-0 w-px ${tick.major ? 'h-3.5 bg-slate-400' : 'h-2 bg-slate-300'}`}
+            className={`absolute bottom-0 w-px ${tick.major ? 'h-3.5 bg-zinc-400' : 'h-2 bg-zinc-300'}`}
             style={{ left: `${((tick.value - min) / (max - min)) * 100}%` }}
           />
         ))}

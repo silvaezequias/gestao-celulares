@@ -248,3 +248,4 @@ next-env.d.ts
 .windsurf/skills/prisma-upgrade-v7/references/prisma-config.md
 .windsurf/skills/prisma-upgrade-v7/references/removed-features.md
 .windsurf/skills/prisma-upgrade-v7/references/schema-changes.md
+.data/

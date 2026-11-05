@@ -1,1 +1,63 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --color-accent: #2f5bea;
+  --color-accent-strong: #2448c7;
+  --color-wa: #16a34a;
+  --color-wab: #0d9488;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  scrollbar-gutter: stable;
+}
+
+body {
+  background: #f6f7f9;
+  color: #18181b;
+}
+
+/* barra de rolagem horizontal escondida (filtros de departamento no mobile) */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* espaço da barra inferior + área segura do iPhone */
+.pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 5.5rem); }
+@media (min-width: 768px) { .pb-safe { padding-bottom: 3rem; } }
+
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.anim-sheet { animation: sheet-up 0.28s cubic-bezier(0.2, 0.9, 0.3, 1); }
+@media (min-width: 640px) { .anim-sheet { animation: pop-in 0.2s ease-out; } }
+.anim-fade { animation: fade-in 0.2s ease-out; }
+.anim-pop { animation: pop-in 0.2s ease-out; }
+
+@media print {
+  .app-chrome { display: none !important; }
+  body { background: white; }
+  main { padding: 0 !important; }
+}
+
+/* Botões e campos base */
+@layer components {
+  .btn-primary {
+    @apply inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 active:scale-[0.98] disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-zinc-100 px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-200 active:scale-[0.98] disabled:opacity-50;
+  }
+  .btn-danger {
+    @apply inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98] disabled:opacity-50;
+  }
+  .field {
+    @apply h-11 w-full rounded-xl border border-zinc-200 bg-white px-3.5 text-[16px] text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 sm:text-sm;
+  }
+  .label {
+    @apply mb-1.5 block text-[13px] font-medium text-zinc-500;
+  }
+}
+
+button { cursor: pointer; }

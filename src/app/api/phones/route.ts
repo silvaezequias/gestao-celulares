@@ -1,24 +1,15 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '../../../lib/prisma';
+import { createPhone, getAppData, invalidate } from '../../../lib/server/repo';
 import { PhoneDraft } from '../../../lib/phones/types';
 
 export async function GET() {
-  const phones = await prisma.phone.findMany({ orderBy: { createdAt: 'asc' } });
+  const { phones } = await getAppData();
   return NextResponse.json(phones);
 }
 
 export async function POST(request: Request) {
   const draft: PhoneDraft = await request.json();
-  const phone = await prisma.phone.create({
-    data: {
-      name: draft.name,
-      model: draft.model,
-      chips: draft.chips,
-      extraNumbers: draft.extraNumbers,
-      whatsapp: draft.whatsapp,
-      caseColor: draft.caseColor,
-      departmentId: draft.departmentId,
-    },
-  });
+  const phone = await createPhone(draft);
+  invalidate();
   return NextResponse.json(phone);
 }

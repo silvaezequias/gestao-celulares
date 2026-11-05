@@ -1,366 +1,179 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { Plus, Smartphone, X, Trash2, Search, Tags, CardSim } from 'lucide-react';
-import { usePhones } from '../../lib/phones/storage';
-import { Department, Phone, PhoneDraft } from '../../lib/phones/types';
+import React, { useCallback, useDeferredValue, useMemo, useState } from 'react';
+import { Plus, Search, Settings2, Smartphone } from 'lucide-react';
+import { useStore } from '../../lib/phones/store';
+import { Phone } from '../../lib/phones/types';
 import { numberMatchesQuery } from '../../lib/phones/search';
 import { PhoneCard } from './PhoneCard';
-import { PhoneFormModal } from './PhoneFormModal';
+import { PhoneDetailSheet } from './PhoneDetailSheet';
+import { PhoneFormSheet } from './PhoneFormSheet';
+import { DepartmentsSheet } from './DepartmentsSheet';
+import { EmptyState, SearchField } from '../ui/bits';
 
-const NO_DEPARTMENT = '__none__';
 const ALL = '__all__';
+const NONE = '__none__';
 
-export const PhonesView: React.FC = () => {
-  const { phones, departments, loaded, addPhone, updatePhone, removePhone, addDepartment, removeDepartment } =
-    usePhones();
+function normalizeText(value: string) {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+export function PhonesView() {
+  const { phones, departments, departmentById } = useStore();
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const [filter, setFilter] = useState(ALL);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Phone | 'new' | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<Phone | null>(null);
-  const [pendingDeleteDepartment, setPendingDeleteDepartment] = useState<Department | null>(null);
-  const [activeFilter, setActiveFilter] = useState<string>(ALL);
-  const [creatingDepartment, setCreatingDepartment] = useState(false);
-  const [newDepartmentName, setNewDepartmentName] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [managing, setManaging] = useState(false);
 
-  const departmentById = useMemo(() => {
-    const map = new Map<string, Department>();
-    departments.forEach((d) => map.set(d.id, d));
-    return map;
-  }, [departments]);
+  const deptKey = useCallback(
+    (p: Phone) => (p.departmentId && departmentById.has(p.departmentId) ? p.departmentId : NONE),
+    [departmentById]
+  );
 
-  const filteredPhones = useMemo(() => {
-    const query = searchQuery.trim();
-    if (!query) return phones;
-    const lowerQuery = query.toLowerCase();
+  const searched = useMemo(() => {
+    const q = deferredQuery.trim();
+    if (!q) return phones;
+    const text = normalizeText(q);
     return phones.filter(
       (p) =>
-        p.chips.some((c) => numberMatchesQuery(c.number, query)) ||
-        p.extraNumbers.some((e) => numberMatchesQuery(e.number, query)) ||
-        p.name.toLowerCase().includes(lowerQuery) ||
-        p.model.toLowerCase().includes(lowerQuery)
+        p.chips.some((c) => numberMatchesQuery(c.number, q)) ||
+        p.extraNumbers.some((e) => numberMatchesQuery(e.number, q)) ||
+        normalizeText(p.name).includes(text) ||
+        normalizeText(p.model).includes(text) ||
+        normalizeText(departmentById.get(p.departmentId ?? '')?.name ?? '').includes(text)
     );
-  }, [phones, searchQuery]);
+  }, [phones, deferredQuery, departmentById]);
 
-  const hasUnassigned = filteredPhones.some((p) => !p.departmentId || !departmentById.has(p.departmentId));
-
-  const groups = useMemo(() => {
-    const map = new Map<string, Phone[]>();
-    departments.forEach((d) => map.set(d.id, []));
-    map.set(NO_DEPARTMENT, []);
-    filteredPhones.forEach((p) => {
-      const key = p.departmentId && departmentById.has(p.departmentId) ? p.departmentId : NO_DEPARTMENT;
-      map.get(key)!.push(p);
-    });
+  const counts = useMemo(() => {
+    const map = new Map<string, number>();
+    searched.forEach((p) => map.set(deptKey(p), (map.get(deptKey(p)) ?? 0) + 1));
     return map;
-  }, [filteredPhones, departments, departmentById]);
+  }, [searched, deptKey]);
 
-  const visibleGroups: { key: string; label: string; items: Phone[] }[] =
-    activeFilter === ALL
-      ? [
-          ...departments.map((d) => ({ key: d.id, label: d.name, items: groups.get(d.id) ?? [] })),
-          { key: NO_DEPARTMENT, label: 'Sem departamento', items: groups.get(NO_DEPARTMENT) ?? [] },
-        ].filter((g) => g.items.length > 0)
-      : [
-          {
-            key: activeFilter,
-            label: activeFilter === NO_DEPARTMENT ? 'Sem departamento' : departmentById.get(activeFilter)?.name ?? '',
-            items: groups.get(activeFilter) ?? [],
-          },
-        ];
+  // Lista única (sem seções por departamento — a maioria tem poucos
+  // aparelhos e as seções deixavam a tela cheia de espaços vazios). O
+  // departamento aparece no próprio card e a ordem agrupa por ele.
+  const visible = useMemo(() => {
+    const deptName = (p: Phone) => departmentById.get(p.departmentId ?? '')?.name ?? '￿';
+    return searched
+      .filter((p) => filter === ALL || deptKey(p) === filter)
+      .sort((a, b) => deptName(a).localeCompare(deptName(b), 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
+  }, [searched, filter, deptKey, departmentById]);
 
-  const handleSubmit = (draft: PhoneDraft) => {
-    if (editing && editing !== 'new') {
-      updatePhone(editing.id, draft);
-    } else {
-      addPhone(draft);
-    }
-    setEditing(null);
-  };
+  const totalChips = useMemo(() => phones.reduce((n, p) => n + p.chips.filter((c) => c.number.trim()).length, 0), [phones]);
+  const openPhone = openId ? phones.find((p) => p.id === openId) ?? null : null;
+  const onOpen = useCallback((p: Phone) => setOpenId(p.id), []);
 
-  const handleCreateDepartment = async () => {
-    const created = await addDepartment(newDepartmentName);
-    if (created) {
-      setNewDepartmentName('');
-      setCreatingDepartment(false);
-      setActiveFilter(created.id);
-    }
+  const filterChip = (key: string, label: string, count?: number) => {
+    const active = filter === key;
+    return (
+      <button
+        key={key}
+        onClick={() => setFilter(active && key !== ALL ? ALL : key)}
+        className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition ${
+          active ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50'
+        }`}
+      >
+        {label}
+        {count !== undefined && (
+          <span className={`tabular-nums ${active ? 'text-white/60' : 'text-zinc-400'}`}>{count}</span>
+        )}
+      </button>
+    );
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="flex items-center justify-between mb-2">
+    <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6 sm:pt-8">
+      <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-bold text-2xl sm:text-3xl text-slate-900 flex items-center gap-2.5">
-            <Smartphone className="w-7 h-7 text-blue-600" />
-            Gestão de Celulares
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Cadastre os aparelhos, seus chips e a atribuição de WhatsApp Normal e Business.
+          <h1 className="text-[26px] font-semibold tracking-tight text-zinc-900 sm:text-3xl">Aparelhos</h1>
+          <p className="mt-0.5 text-sm text-zinc-500">
+            {phones.length} {phones.length === 1 ? 'celular' : 'celulares'} · {totalChips} chips · {departments.length} departamentos
           </p>
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <Link
-            href="/chips"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer"
-          >
-            <CardSim className="w-4 h-4" />
-            Chips
-          </Link>
-          <Link
-            href="/etiquetas"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer"
-          >
-            <Tags className="w-4 h-4" />
-            Gerar etiquetas
-          </Link>
-          <button
-            onClick={() => setEditing('new')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors cursor-pointer shadow-xs"
-          >
-            <Plus className="w-4 h-4" />
-            Adicionar celular
-          </button>
-        </div>
+        <button onClick={() => setEditing('new')} className="btn-primary hidden md:inline-flex">
+          <Plus className="h-4 w-4" />
+          Novo celular
+        </button>
       </div>
 
-      <div className="relative mt-4 mb-6 max-w-md">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Buscar por número, nome ou modelo do celular"
-          className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-            aria-label="Limpar busca"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
+      <div className="mt-5">
+        <SearchField value={query} onChange={setQuery} placeholder="Buscar número (ex: 4565), nome ou modelo" />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 mb-8">
-        {departments.length > 0 && (
-          <button
-            onClick={() => setActiveFilter(ALL)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-              activeFilter === ALL
-                ? 'bg-slate-900 border-slate-900 text-white'
-                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Todos
-          </button>
-        )}
+      <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
+        {filterChip(ALL, 'Todos', searched.length)}
+        {departments.map((d) => filterChip(d.id, d.name, counts.get(d.id) ?? 0))}
+        {(counts.get(NONE) ?? 0) > 0 && filterChip(NONE, 'Sem departamento', counts.get(NONE))}
+        <button
+          onClick={() => setManaging(true)}
+          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium text-zinc-500 border border-dashed border-zinc-300 transition hover:bg-white hover:text-zinc-800"
+        >
+          <Settings2 className="h-3.5 w-3.5" />
+          Departamentos
+        </button>
+      </div>
 
-        {departments.map((d) => (
-            <div key={d.id} className="group relative">
-              <button
-                onClick={() => setActiveFilter(d.id)}
-                className={`pl-3 pr-2 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer flex items-center gap-1.5 ${
-                  activeFilter === d.id
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {d.name}
-                <span
-                  role="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPendingDeleteDepartment(d);
-                  }}
-                  className={`opacity-0 group-hover:opacity-100 transition-opacity rounded-full p-0.5 ${
-                    activeFilter === d.id ? 'hover:bg-blue-700' : 'hover:bg-slate-200'
-                  }`}
-                >
-                  <X className="w-3 h-3" />
-                </span>
-              </button>
-            </div>
-          ))}
-
-        {hasUnassigned && (
-          <button
-            onClick={() => setActiveFilter(NO_DEPARTMENT)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-              activeFilter === NO_DEPARTMENT
-                ? 'bg-slate-900 border-slate-900 text-white'
-                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            Sem departamento
-          </button>
-        )}
-
-        {creatingDepartment ? (
-          <div className="flex items-center gap-1.5">
-            <input
-              type="text"
-              autoFocus
-              value={newDepartmentName}
-              onChange={(e) => setNewDepartmentName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleCreateDepartment();
-                } else if (e.key === 'Escape') {
-                  setCreatingDepartment(false);
-                  setNewDepartmentName('');
-                }
-              }}
-              placeholder="Nome do departamento"
-              className="px-3 py-1.5 rounded-full text-xs border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
-            />
-            <button
-              onClick={handleCreateDepartment}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer"
-            >
-              Criar
+      <div className="mt-6 space-y-8">
+        {phones.length === 0 ? (
+          <EmptyState icon={Smartphone} title="Nenhum celular cadastrado ainda">
+            <button onClick={() => setEditing('new')} className="btn-primary mt-4">
+              <Plus className="h-4 w-4" /> Cadastrar o primeiro
             </button>
-            <button
-              onClick={() => {
-                setCreatingDepartment(false);
-                setNewDepartmentName('');
-              }}
-              className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          </EmptyState>
+        ) : visible.length === 0 ? (
+          <EmptyState icon={Search} title="Nada encontrado">
+            {deferredQuery ? <>Nenhum celular corresponde a “{deferredQuery}”.</> : 'Nenhum celular neste departamento.'}
+          </EmptyState>
         ) : (
-          <button
-            onClick={() => setCreatingDepartment(true)}
-            className="px-3 py-1.5 rounded-full text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700 transition-colors cursor-pointer flex items-center gap-1"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Departamento
-          </button>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {visible.map((p) => (
+              <PhoneCard
+                key={p.id}
+                phone={p}
+                departmentName={departmentById.get(p.departmentId ?? '')?.name}
+                query={deferredQuery}
+                onOpen={onOpen}
+              />
+            ))}
+          </div>
         )}
       </div>
 
-      {!loaded ? null : phones.length === 0 ? (
-        <div className="text-center py-20 rounded-2xl border border-dashed border-slate-200">
-          <Smartphone className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 text-sm">Nenhum celular cadastrado ainda.</p>
-          <button
-            onClick={() => setEditing('new')}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-sm font-medium text-slate-700 transition-colors cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Cadastrar o primeiro
-          </button>
-        </div>
-      ) : filteredPhones.length === 0 ? (
-        <div className="text-center py-20 rounded-2xl border border-dashed border-slate-200">
-          <Search className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 text-sm">Nenhum celular encontrado para &quot;{searchQuery}&quot;.</p>
-        </div>
-      ) : (
-        <div className="space-y-10">
-          {visibleGroups.map((group) => (
-            <div key={group.key}>
-              {activeFilter === ALL && departments.length > 0 && (
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-                  {group.label} <span className="font-normal text-slate-300">({group.items.length})</span>
-                </h2>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {group.items.map((phone) => (
-                  <PhoneCard
-                    key={phone.id}
-                    phone={phone}
-                    departmentName={phone.departmentId ? departmentById.get(phone.departmentId)?.name : undefined}
-                    searchQuery={searchQuery}
-                    onEdit={() => setEditing(phone)}
-                    onDelete={() => setPendingDelete(phone)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Botão flutuante (mobile) */}
+      <button
+        onClick={() => setEditing('new')}
+        className="app-chrome fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] right-4 z-20 grid h-14 w-14 place-items-center rounded-2xl bg-zinc-900 text-white shadow-[0_10px_30px_-8px_rgba(0,0,0,0.5)] transition active:scale-95 md:hidden"
+        aria-label="Novo celular"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
 
+      {openPhone && (
+        <PhoneDetailSheet
+          phone={openPhone}
+          onClose={() => setOpenId(null)}
+          onEdit={() => {
+            setEditing(openPhone);
+            setOpenId(null);
+          }}
+        />
+      )}
       {editing && (
-        <PhoneFormModal
+        <PhoneFormSheet
           key={editing === 'new' ? 'new' : editing.id}
           initial={editing === 'new' ? undefined : editing}
-          departments={departments}
-          onCreateDepartment={addDepartment}
+          defaultDepartmentId={filter !== ALL && filter !== NONE ? filter : undefined}
           onClose={() => setEditing(null)}
-          onSubmit={handleSubmit}
+          onSaved={(p) => {
+            setEditing(null);
+            setOpenId(p.id);
+          }}
         />
       )}
-
-      {pendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-xs" onClick={() => setPendingDelete(null)} />
-          <div className="relative w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6 space-y-4">
-            <h3 className="font-semibold text-slate-900">Excluir celular?</h3>
-            <p className="text-sm text-slate-500">
-              Tem certeza que deseja excluir <span className="font-medium text-slate-700">{pendingDelete.name}</span>? Essa ação não pode ser desfeita.
-            </p>
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => setPendingDelete(null)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  removePhone(pendingDelete.id);
-                  setPendingDelete(null);
-                }}
-                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors cursor-pointer"
-              >
-                Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {pendingDeleteDepartment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-xs" onClick={() => setPendingDeleteDepartment(null)} />
-          <div className="relative w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6 space-y-4">
-            <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-              <Trash2 className="w-4 h-4 text-red-500" />
-              Excluir departamento?
-            </h3>
-            <p className="text-sm text-slate-500">
-              Tem certeza que deseja excluir <span className="font-medium text-slate-700">{pendingDeleteDepartment.name}</span>?
-              Os celulares desse departamento passam para &quot;Sem departamento&quot;.
-            </p>
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => setPendingDeleteDepartment(null)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  if (activeFilter === pendingDeleteDepartment.id) setActiveFilter(ALL);
-                  removeDepartment(pendingDeleteDepartment.id);
-                  setPendingDeleteDepartment(null);
-                }}
-                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors cursor-pointer"
-              >
-                Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {managing && <DepartmentsSheet onClose={() => setManaging(false)} />}
     </div>
   );
-};
+}

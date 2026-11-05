@@ -1,14 +1,13 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, Printer, Lock, Pencil, FlipHorizontal2 } from 'lucide-react';
-import { usePhones } from '../../lib/phones/storage';
+import { Printer, Lock, Pencil, FlipHorizontal2 } from 'lucide-react';
+import { useStore } from '../../lib/phones/store';
 import { Phone } from '../../lib/phones/types';
 import { resolveNumberById } from '../../lib/phones/resolve';
 import { formatPhoneNumber } from '../../lib/phones/format';
 import { formatRelativeTime } from '../../lib/phones/relativeTime';
-import { finishForCase } from '../../lib/phones/colors';
+import { bodyColorFor } from '../../lib/phones/devices';
 import { LABEL_PRESETS, LabelPreset } from '../../lib/phones/labelPresets';
 import { RulerSlider } from './RulerSlider';
 import { MarginGuides, MarginEdge, PageMargins } from './MarginGuides';
@@ -57,7 +56,7 @@ const Label: React.FC<{ phone: Phone }> = ({ phone }) => {
   const normalNumber = resolveNumberById(phone, phone.whatsapp.normal);
   const businessNumber = resolveNumberById(phone, phone.whatsapp.business);
   const chipsWithNumber = phone.chips.filter((c) => c.number.trim());
-  const borderColor = finishForCase(`${phone.name}-${phone.model}`, phone.caseColor).frame;
+  const borderColor = bodyColorFor(`${phone.name}-${phone.model}`, phone.caseColor);
 
   return (
     <div className="label-cell" style={{ borderColor }}>
@@ -92,7 +91,8 @@ const Label: React.FC<{ phone: Phone }> = ({ phone }) => {
 };
 
 export const LabelsView: React.FC = () => {
-  const { phones, loaded } = usePhones();
+  const { phones } = useStore();
+  const loaded = true;
   const [margins, setMargins] = useState<PageMargins>(DEFAULT_MARGINS);
   const [gapRowCm, setGapRowCm] = useState(DEFAULT_GAP_CM);
   const [gapColCm, setGapColCm] = useState(DEFAULT_GAP_CM);
@@ -255,9 +255,11 @@ export const LabelsView: React.FC = () => {
         @page { size: A4; margin: 0; }
 
         .labels-toolbar {
-          max-width: 1100px;
+          max-width: 72rem;
           margin: 0 auto;
           padding: 1.5rem 1rem 0 1rem;
+        }
+        @media (min-width: 640px) { .labels-toolbar { padding: 2rem 1.5rem 0 1.5rem; }
         }
 
         .a4-frame {
@@ -434,43 +436,30 @@ export const LabelsView: React.FC = () => {
 
       <div className="no-print">
         <div className="labels-toolbar space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 text-sm font-medium transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Voltar
-              </Link>
-              <div>
-                <h1 className="font-bold text-lg text-slate-900">Etiquetas para impressão</h1>
-                <p className="text-xs text-slate-400">
-                  Folha A4, grade {columns}x{rows} — {printablePhones.length} de {phones.length} celular
-                  {phones.length === 1 ? '' : 'es'} selecionado{printablePhones.length === 1 ? '' : 's'}, em{' '}
-                  {pages.length || 0} página{pages.length === 1 ? '' : 's'}.
-                </p>
-              </div>
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="text-[26px] font-semibold tracking-tight text-zinc-900 sm:text-3xl">Etiquetas</h1>
+              <p className="mt-0.5 text-sm text-zinc-500">
+                A4 · grade {columns}×{rows} · {printablePhones.length} de {phones.length} selecionados ·{' '}
+                {pages.length || 0} página{pages.length === 1 ? '' : 's'}
+              </p>
             </div>
 
-            <button
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors cursor-pointer shadow-xs shrink-0"
-            >
+            <button onClick={() => window.print()} className="btn-primary shrink-0">
               <Printer className="w-4 h-4" />
               Imprimir
             </button>
           </div>
 
-          <div className="flex items-center flex-wrap gap-3">
+          <div className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1">
             {LABEL_PRESETS.map((preset) => (
               <button
                 key={preset.id}
                 onClick={() => applyPreset(preset)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                className={`inline-flex shrink-0 items-center gap-1.5 h-9 px-3.5 rounded-full text-[13px] font-semibold border transition-colors cursor-pointer ${
                   activePresetId === preset.id
-                    ? 'bg-slate-900 border-slate-900 text-white'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    ? 'bg-zinc-900 border-zinc-900 text-white'
+                    : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
                 }`}
               >
                 {preset.locked && <Lock className="w-3 h-3" />}
@@ -481,7 +470,7 @@ export const LabelsView: React.FC = () => {
             {isLocked && (
               <button
                 onClick={() => setActivePresetId(null)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                className="inline-flex shrink-0 items-center gap-1.5 h-9 px-3.5 rounded-full text-[13px] font-medium border border-dashed border-zinc-300 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition-colors cursor-pointer"
               >
                 <Pencil className="w-3 h-3" />
                 Editar manualmente
@@ -489,8 +478,8 @@ export const LabelsView: React.FC = () => {
             )}
 
             <label
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border cursor-pointer transition-colors ${
-                mirrorMode ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600'
+              className={`inline-flex shrink-0 items-center gap-1.5 h-9 px-3.5 rounded-full text-[13px] font-medium border cursor-pointer transition-colors ${
+                mirrorMode ? 'bg-zinc-900 border-zinc-900 text-white' : 'bg-white border-zinc-200 text-zinc-600'
               } ${isLocked ? 'opacity-40 pointer-events-none' : ''}`}
             >
               <input
@@ -506,14 +495,14 @@ export const LabelsView: React.FC = () => {
           </div>
 
           {isLocked && (
-            <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-xs text-zinc-500 bg-zinc-50 border border-zinc-100 rounded-lg px-3 py-2">
               <Lock className="w-3.5 h-3.5 shrink-0" />
               Medidas fixas de &quot;{activePreset?.name}&quot; — as réguas e os sliders ficam travados enquanto esse
               preset estiver selecionado. Clique em &quot;Editar manualmente&quot; pra ajustar livremente.
             </div>
           )}
 
-          <div className="flex items-center gap-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
             <RulerSlider
               label="Espaço vertical"
               value={gapRowCm}
@@ -534,46 +523,46 @@ export const LabelsView: React.FC = () => {
             />
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <p className="text-sm font-semibold text-slate-700">
+          <div className="rounded-[20px] bg-white ring-1 ring-zinc-200/70">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
+              <p className="text-sm font-semibold text-zinc-700">
                 Selecionar etiquetas para impressão
-                <span className="text-slate-400 font-normal ml-1.5">(ordenado por alteração recente)</span>
+                <span className="text-zinc-400 font-normal ml-1.5">(ordenado por alteração recente)</span>
               </p>
               <div className="flex items-center gap-2">
                 <button
                   onClick={selectAll}
-                  className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors cursor-pointer"
+                  className="text-xs font-medium text-zinc-900 hover:text-zinc-600 transition-colors cursor-pointer"
                 >
                   Selecionar todos
                 </button>
-                <span className="text-slate-300">•</span>
+                <span className="text-zinc-300">•</span>
                 <button
                   onClick={clearSelection}
-                  className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+                  className="text-xs font-medium text-zinc-500 hover:text-zinc-700 transition-colors cursor-pointer"
                 >
                   Limpar seleção
                 </button>
               </div>
             </div>
-            <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
+            <div className="max-h-56 overflow-y-auto divide-y divide-zinc-50">
               {recencyOrderedPhones.map((phone) => (
                 <label
                   key={phone.id}
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 cursor-pointer transition-colors"
                 >
                   <input
                     type="checkbox"
                     checked={selectedIds.has(phone.id)}
                     onChange={() => toggleSelected(phone.id)}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/30 cursor-pointer"
+                    className="w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500/30 cursor-pointer"
                   />
-                  <span className="text-sm font-medium text-slate-800 flex-1 truncate">{phone.name}</span>
-                  <span className="text-xs text-slate-400 shrink-0">{formatRelativeTime(phone.updatedAt)}</span>
+                  <span className="text-sm font-medium text-zinc-800 flex-1 truncate">{phone.name}</span>
+                  <span className="text-xs text-zinc-400 shrink-0">{formatRelativeTime(phone.updatedAt)}</span>
                 </label>
               ))}
               {recencyOrderedPhones.length === 0 && (
-                <p className="text-sm text-slate-400 px-4 py-6 text-center">Nenhum celular cadastrado ainda.</p>
+                <p className="text-sm text-zinc-400 px-4 py-6 text-center">Nenhum celular cadastrado ainda.</p>
               )}
             </div>
           </div>
@@ -582,7 +571,7 @@ export const LabelsView: React.FC = () => {
 
       {!loaded ? null : printablePhones.length === 0 ? (
         <div className="no-print text-center py-16">
-          <p className="text-slate-500 text-sm">
+          <p className="text-zinc-500 text-sm">
             {phones.length === 0
               ? 'Nenhum celular cadastrado para gerar etiquetas.'
               : 'Nenhuma etiqueta selecionada pra impressão.'}

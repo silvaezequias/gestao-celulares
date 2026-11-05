@@ -1,33 +1,39 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import type { Metadata, Viewport } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
+import './globals.css';
+import { getAppData } from '../lib/server/repo';
+import { StoreProvider } from '../lib/phones/store';
+import { AppShell } from '../components/shell/AppShell';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
+const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "Gestão de Celulares",
-  description: "Cadastro de celulares, chips e números de WhatsApp",
+  title: 'Gestão de Celulares',
+  description: 'Cadastro de celulares, chips e números de WhatsApp',
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#f6f7f9',
+};
+
+// Página gerada no servidor com os dados já embutidos e mantida em cache;
+// é regerada automaticamente quando algo é alterado (ver lib/server/repo).
+export const revalidate = 3600;
+
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const { phones, departments } = await getAppData();
+
   return (
-    <html
-      lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-slate-50 text-slate-800">{children}</body>
+    <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className="min-h-dvh font-sans">
+        <StoreProvider initialPhones={phones} initialDepartments={departments}>
+          <AppShell>{children}</AppShell>
+        </StoreProvider>
+      </body>
     </html>
   );
 }
