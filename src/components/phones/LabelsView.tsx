@@ -568,6 +568,8 @@ export const LabelsView: React.FC = () => {
             page-break-after: always;
           }
           .a4-frame:last-child { page-break-after: auto; }
+          /* a borda é só guia de tela; transparente mantém o tamanho idêntico */
+          .label-cell { border-color: transparent !important; }
           .a4-page {
             width: 210mm;
             height: 297mm;
