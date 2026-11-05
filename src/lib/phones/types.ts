@@ -78,8 +78,6 @@ export interface NumberRecord {
   carrier?: string;
   owner?: string;
   plan?: 'pre' | 'pos';
-  /** datas ISO (AAAA-MM-DD) das recargas, em ordem crescente */
-  recharges: string[];
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -87,5 +85,3 @@ export interface NumberRecord {
 
 export type NumberRecordDraft = Omit<NumberRecord, 'id' | 'createdAt' | 'updatedAt'>;
 
-/** validade da recarga pré-paga, em dias */
-export const RECHARGE_DAYS = 90;

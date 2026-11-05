@@ -223,9 +223,6 @@ function toNumber(raw: any): NumberRecord {
     ...(raw.carrier ? { carrier: raw.carrier } : {}),
     ...(raw.owner ? { owner: raw.owner } : {}),
     ...(raw.plan === 'pre' || raw.plan === 'pos' ? { plan: raw.plan } : {}),
-    recharges: (raw.recharges ?? [])
-      .map((d: any) => new Date(d).toISOString().slice(0, 10))
-      .sort(),
     ...(raw.notes ? { notes: raw.notes } : {}),
     createdAt: new Date(raw.createdAt ?? Date.now()).toISOString(),
     updatedAt: new Date(raw.updatedAt ?? Date.now()).toISOString(),
@@ -240,7 +237,6 @@ function numberData(draft: NumberRecordDraft) {
     carrier: draft.carrier?.trim() || null,
     owner: draft.owner?.trim() || null,
     plan: draft.plan ?? null,
-    recharges: [...new Set(draft.recharges)].sort().map((d) => new Date(`${d}T12:00:00.000Z`)),
     notes: draft.notes?.trim() || null,
   };
 }

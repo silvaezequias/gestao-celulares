@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useDeferredValue, useMemo, useState } from 'react';
-import { CalendarCheck, Hash, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { Hash, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useStore } from '../../lib/phones/store';
 import { kindInfo, NumberRecord, NumberRecordDraft, RecordKind, NUMBER_KINDS } from '../../lib/phones/types';
 import { numberMatchesQuery } from '../../lib/phones/search';
 import { formatPhoneNumber, maskPhoneNumber } from '../../lib/phones/format';
-import { buildRows, formatDate, NumberRow, rechargeStatus, RechargeStatus, todayIso } from '../../lib/phones/numbers';
+import { buildRows, NumberRow } from '../../lib/phones/numbers';
 import { DeviceThumb } from '../device/DeviceThumb';
 import { EmptyState, Highlight, KIND_ICONS, SearchField, SourceBadge, WaBadge } from '../ui/bits';
 import { ConfirmSheet, Sheet } from '../ui/Sheet';
@@ -19,7 +19,7 @@ const KINDS: { kind: RecordKind; label: string }[] = [
 
 const kindLabel = (k: RecordKind) => (k === 'chip' ? 'Chip' : kindInfo(k).label);
 
-type StatusFilter = 'all' | 'due' | 'nophone' | 'unregistered';
+type StatusFilter = 'all' | 'nophone' | 'unregistered';
 
 // ---------- Peças visuais ----------
 
@@ -50,23 +50,6 @@ export function KindIcon({ kind, large }: { kind: RecordKind; large?: boolean })
   );
 }
 
-function RechargeBadge({ status }: { status: RechargeStatus | null }) {
-  if (!status) return null;
-  const base = 'inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold ring-1';
-  switch (status.state) {
-    case 'pos':
-      return <span className={`${base} bg-zinc-50 text-zinc-600 ring-zinc-200`}>Fatura</span>;
-    case 'none':
-      return <span className={`${base} bg-zinc-50 text-zinc-500 ring-zinc-200`}>Sem recarga registrada</span>;
-    case 'late':
-      return <span className={`${base} bg-red-50 text-red-700 ring-red-600/15`}>Recarga vencida há {-status.daysLeft!}d</span>;
-    case 'soon':
-      return <span className={`${base} bg-amber-50 text-amber-700 ring-amber-600/15`}>Recarga vence em {status.daysLeft}d</span>;
-    default:
-      return <span className={`${base} bg-emerald-50 text-emerald-700 ring-emerald-600/15`}>Recarga em dia</span>;
-  }
-}
-
 // ---------- Tela ----------
 
 export function NumbersView() {
@@ -90,15 +73,10 @@ export function NumbersView() {
   );
 
   const byKind = useMemo(() => rows.filter((r) => kind === 'all' || r.kind === kind), [rows, kind]);
-  const isDue = (r: NumberRow) => {
-    const s = rechargeStatus(r.record);
-    return s?.state === 'late' || s?.state === 'soon';
-  };
 
   const list = useMemo(() => {
     const q = deferred.trim().toLowerCase();
     return byKind.filter((r) => {
-      if (status === 'due' && !isDue(r)) return false;
       if (status === 'nophone' && r.usages.length > 0) return false;
       if (status === 'unregistered' && r.record) return false;
       if (!q) return true;
@@ -113,7 +91,6 @@ export function NumbersView() {
 
   const statusFilters: { key: StatusFilter; label: string; count: number }[] = [
     { key: 'all', label: 'Todos', count: byKind.length },
-    { key: 'due', label: 'Recarga vencendo', count: byKind.filter(isDue).length },
     { key: 'nophone', label: 'Fora de aparelho', count: byKind.filter((r) => r.usages.length === 0).length },
     { key: 'unregistered', label: 'Não cadastrados', count: byKind.filter((r) => !r.record).length },
   ];
@@ -130,7 +107,7 @@ export function NumbersView() {
         <div>
           <h1 className="text-[26px] font-semibold tracking-tight text-zinc-900 sm:text-3xl">Números</h1>
           <p className="mt-0.5 text-sm text-zinc-500">
-            {rows.length} números · chips, APIs, fixos e eSIMs, com recargas e onde cada um é usado.
+            {rows.length} números · chips, APIs, fixos e eSIMs e onde cada um é usado.
           </p>
         </div>
         <button onClick={() => setEditing({})} className="btn-primary hidden md:inline-flex">
@@ -201,7 +178,6 @@ export function NumbersView() {
                     {r.kind !== 'chip' && <SourceBadge source={r.kind} />}
                     {r.usages.some((u) => u.isNormal) && <WaBadge kind="normal" />}
                     {r.usages.some((u) => u.isBusiness) && <WaBadge kind="business" />}
-                    <RechargeBadge status={rechargeStatus(r.record)} />
                   </div>
                 </div>
               </button>
@@ -251,20 +227,9 @@ function NumberDetailSheet({
   onClose: () => void;
   onEdit: (record?: NumberRecord, prefill?: Partial<NumberRecordDraft>) => void;
 }) {
-  const { departmentById, updateNumber, removeNumber } = useStore();
+  const { departmentById, removeNumber } = useStore();
   const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
   const rec = row.record;
-  const status = rechargeStatus(rec);
-
-  const recharge = async () => {
-    if (!rec) return;
-    setBusy(true);
-    const { id, createdAt, updatedAt, ...draft } = rec;
-    void id; void createdAt; void updatedAt;
-    await updateNumber(rec.id, { ...draft, plan: draft.plan ?? 'pre', recharges: [...draft.recharges, todayIso()] }).catch(() => null);
-    setBusy(false);
-  };
 
   return (
     <>
@@ -277,14 +242,9 @@ function NumberDetailSheet({
               <button onClick={() => setConfirming(true)} className="btn-secondary w-12 px-0 text-red-600" aria-label="Excluir número">
                 <Trash2 className="h-4 w-4" />
               </button>
-              <button onClick={() => onEdit(rec)} className="btn-secondary flex-1">
+              <button onClick={() => onEdit(rec)} className="btn-primary flex-1">
                 <Pencil className="h-4 w-4" /> Editar
               </button>
-              {rec.plan !== 'pos' && rec.kind !== 'fixo' && (
-                <button onClick={recharge} disabled={busy} className="btn-primary flex-[1.4]">
-                  <CalendarCheck className="h-4 w-4" /> {busy ? 'Salvando…' : 'Recarreguei hoje'}
-                </button>
-              )}
             </div>
           ) : (
             <button
@@ -304,7 +264,6 @@ function NumberDetailSheet({
               <p className="text-sm text-zinc-500">{rec?.owner || 'Não cadastrado'}</p>
               <div className="mt-1 flex flex-wrap gap-1">
                 <SourceBadge source={row.kind} size="md" />
-                <RechargeBadge status={status} />
               </div>
             </div>
             <CopyButton value={row.number.replace(/\D/g, '')} />
@@ -315,9 +274,7 @@ function NumberDetailSheet({
               {[
                 ['Tipo', kindLabel(rec.kind)],
                 ['Operadora', rec.carrier || '—'],
-                ['Plano', rec.kind === 'fixo' ? '—' : rec.plan === 'pos' ? 'Pós-pago (fatura)' : 'Pré-pago'],
-                ['Última recarga', status?.last ? formatDate(status.last) : '—'],
-                ...(status?.due ? [['Próxima recarga', formatDate(status.due)]] : []),
+                ['Plano', rec.kind === 'fixo' ? '—' : rec.plan === 'pos' ? 'Pós-pago' : 'Pré-pago'],
               ].map(([k, v]) => (
                 <div key={k} className="rounded-xl bg-zinc-50 px-3 py-2 ring-1 ring-inset ring-zinc-100">
                   <dt className="text-[11px] font-medium text-zinc-400">{k}</dt>
@@ -363,18 +320,6 @@ function NumberDetailSheet({
             )}
           </div>
 
-          {rec && rec.recharges.length > 0 && (
-            <div>
-              <p className="label">Histórico de recargas</p>
-              <div className="flex flex-wrap gap-1.5">
-                {[...rec.recharges].reverse().map((d) => (
-                  <span key={d} className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium tabular-nums text-zinc-600">
-                    {formatDate(d)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </Sheet>
 
@@ -418,8 +363,6 @@ function NumberFormSheet({
   const [carrier, setCarrier] = useState(base.carrier ?? '');
   const [owner, setOwner] = useState(base.owner ?? '');
   const [plan, setPlan] = useState<'pre' | 'pos'>(base.plan ?? 'pre');
-  const [recharges, setRecharges] = useState<string[]>(base.recharges ?? []);
-  const [newDate, setNewDate] = useState(todayIso());
   const [notes, setNotes] = useState(base.notes ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -434,7 +377,6 @@ function NumberFormSheet({
       carrier: carrier.trim() || undefined,
       owner: owner.trim() || undefined,
       plan: kind === 'fixo' ? undefined : plan,
-      recharges: [...new Set(recharges)].sort(),
       notes: notes.trim() || undefined,
     };
     setSaving(true);
@@ -518,8 +460,8 @@ function NumberFormSheet({
             <div className="inline-flex rounded-full bg-zinc-100 p-0.5">
               {(
                 [
-                  ['pre', 'Pré-pago (recarga)'],
-                  ['pos', 'Pós-pago (fatura)'],
+                  ['pre', 'Pré-pago'],
+                  ['pos', 'Pós-pago'],
                 ] as const
               ).map(([v, l]) => (
                 <button
@@ -537,38 +479,6 @@ function NumberFormSheet({
           </div>
         )}
 
-        {kind !== 'fixo' && plan === 'pre' && (
-          <div>
-            <label className="label">Recargas</label>
-            <div className="flex gap-2">
-              <input type="date" className="field" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-              <button
-                type="button"
-                onClick={() => newDate && setRecharges((r) => [...new Set([...r, newDate])].sort())}
-                className="btn-secondary shrink-0"
-              >
-                <Plus className="h-4 w-4" /> Adicionar
-              </button>
-            </div>
-            {recharges.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {[...recharges].reverse().map((d) => (
-                  <span key={d} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 py-1 pl-2.5 pr-1 text-xs font-medium tabular-nums text-zinc-600">
-                    {formatDate(d)}
-                    <button
-                      type="button"
-                      onClick={() => setRecharges((r) => r.filter((x) => x !== d))}
-                      className="grid h-5 w-5 place-items-center rounded-full text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700"
-                      aria-label={`Remover recarga de ${formatDate(d)}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         <div>
           <label className="label">Observações</label>

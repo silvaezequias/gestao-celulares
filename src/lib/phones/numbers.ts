@@ -1,4 +1,4 @@
-import { NumberRecord, Phone, RecordKind, RECHARGE_DAYS } from './types';
+import { NumberRecord, Phone, RecordKind } from './types';
 import { normalizeDigits } from './search';
 
 // Dois números são o mesmo quando batem os 8 últimos dígitos (o DDD e o +55
@@ -99,40 +99,3 @@ export function buildRows(records: NumberRecord[], phones: Phone[]): NumberRow[]
   return [...rows, ...loose];
 }
 
-export type RechargeState = 'ok' | 'soon' | 'late' | 'none' | 'pos';
-
-export interface RechargeStatus {
-  state: RechargeState;
-  last?: string;
-  due?: string;
-  daysLeft?: number;
-}
-
-const DAY = 86400000;
-
-export function rechargeStatus(record?: NumberRecord, today = new Date()): RechargeStatus | null {
-  if (!record || record.kind === 'fixo') return null;
-  if (record.plan === 'pos') return { state: 'pos' };
-  const last = record.recharges[record.recharges.length - 1];
-  if (!last) return { state: 'none' };
-  const dueDate = new Date(new Date(`${last}T12:00:00`).getTime() + RECHARGE_DAYS * DAY);
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).getTime();
-  const daysLeft = Math.round((dueDate.getTime() - start) / DAY);
-  return {
-    state: daysLeft < 0 ? 'late' : daysLeft <= 15 ? 'soon' : 'ok',
-    last,
-    due: dueDate.toISOString().slice(0, 10),
-    daysLeft,
-  };
-}
-
-export function formatDate(iso?: string): string {
-  if (!iso) return '';
-  const [y, m, d] = iso.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
-}
-
-export function todayIso(): string {
-  const t = new Date();
-  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
-}
