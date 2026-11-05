@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Printer, Lock, Pencil, FlipHorizontal2 } from 'lucide-react';
 import { useStore } from '../../lib/phones/store';
-import { Phone } from '../../lib/phones/types';
-import { resolveNumberById } from '../../lib/phones/resolve';
+import { NumberRecord, Phone } from '../../lib/phones/types';
+import { sameNumber } from '../../lib/phones/numbers';
+import { NumberSource } from '../ui/bits';
+import { phoneNumbers } from './PhoneCard';
 import { formatPhoneNumber } from '../../lib/phones/format';
 import { formatRelativeTime } from '../../lib/phones/relativeTime';
 import { bodyColorFor } from '../../lib/phones/devices';
@@ -52,46 +54,109 @@ function chunk<T>(items: T[], size: number): T[][] {
   return result;
 }
 
-const Label: React.FC<{ phone: Phone }> = ({ phone }) => {
-  const normalNumber = resolveNumberById(phone, phone.whatsapp.normal);
-  const businessNumber = resolveNumberById(phone, phone.whatsapp.business);
-  const chipsWithNumber = phone.chips.filter((c) => c.number.trim());
+// Tamanho de referência da etiqueta (Folha de Adesivos, 3×7): os tamanhos de
+// fonte abaixo foram pensados pra ela e escalam junto com a etiqueta real.
+const REF_W_MM = 63.3;
+const REF_H_MM = 38.1;
+const MIN_FIT = 0.8;
+
+const SOURCE_TAG: Partial<Record<NumberSource, string>> = {
+  whatsapp: 'SEM CHIP',
+  api: 'API',
+  esim: 'eSIM',
+  fixo: 'FIXO',
+};
+
+interface LabelLine {
+  id: string;
+  label: string;
+  number: string;
+  carrier?: string;
+  owner?: string;
+  tag?: string;
+  isNormal: boolean;
+  isBusiness: boolean;
+}
+
+function labelLines(phone: Phone, records: NumberRecord[]): LabelLine[] {
+  return phoneNumbers(phone).map((n) => {
+    const rec = records.find((r) => sameNumber(r.number, n.number));
+    const chip = phone.chips.find((c) => c.id === n.id);
+    const tag = n.source === 'api' && n.provider ? `API ${n.provider}` : SOURCE_TAG[n.source];
+    return {
+      id: n.id,
+      label: n.label,
+      // número completo do cadastro quando o aparelho só tem o final
+      number: formatPhoneNumber(rec && rec.number.length > n.number.replace(/\D/g, '').length ? rec.number : n.number),
+      carrier: (chip?.carrier || rec?.carrier)?.toUpperCase(),
+      owner: rec?.owner,
+      tag,
+      isNormal: n.isNormal,
+      isBusiness: n.isBusiness,
+    };
+  });
+}
+
+const Label: React.FC<{
+  phone: Phone;
+  department?: string;
+  records: NumberRecord[];
+  baseScale: number;
+}> = ({ phone, department, records, baseScale }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(baseScale);
+  const lines = useMemo(() => labelLines(phone, records), [phone, records]);
+  const owners = [...new Map(lines.filter((l) => l.owner?.trim()).map((l) => [l.owner!.trim().toUpperCase(), l.owner!.trim()])).values()];
   const borderColor = bodyColorFor(`${phone.name}-${phone.model}`, phone.caseColor);
 
+  // Começa no tamanho proporcional à etiqueta e diminui até tudo caber
+  // (largura e altura) — etiquetas com 3 números ficam um pouco menores,
+  // etiquetas grandes ganham letra maior.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let s = baseScale;
+    el.style.setProperty('--fit', String(s));
+    while (s > MIN_FIT && (el.scrollHeight > el.clientHeight + 0.5 || el.scrollWidth > el.clientWidth + 0.5)) {
+      s = Math.round((s - 0.03) * 100) / 100;
+      el.style.setProperty('--fit', String(s));
+    }
+    setFit(s);
+  }, [baseScale, lines, owners.length, department, phone.name, phone.model]);
+
   return (
-    <div className="label-cell" style={{ borderColor }}>
-      <div style={{ fontSize: '8.5pt', fontWeight: 700, lineHeight: 1.15, color: '#0f172a' }}>{phone.name}</div>
-      <div style={{ fontSize: '6.5pt', color: '#64748b', lineHeight: 1.15, marginBottom: '1mm' }}>{phone.model}</div>
-
-      {chipsWithNumber.map((chip) => (
-        <div key={chip.id} style={{ fontSize: '7pt', fontFamily: 'monospace', lineHeight: 1.3, color: '#1e293b' }}>
-          <span style={{ color: '#94a3b8', fontWeight: 700 }}>{chip.label}: </span>
-          {formatPhoneNumber(chip.number)}
+    <div ref={ref} className="label-cell" style={{ borderColor, ['--fit' as string]: fit } as React.CSSProperties}>
+      <div className="lb-head">
+        <div className="lb-name">{phone.name}</div>
+        <div className="lb-model">
+          {[phone.model, department].filter(Boolean).join(' · ') || 'Modelo não informado'}
         </div>
-      ))}
+      </div>
 
-      {(normalNumber || businessNumber) && (
-        <div style={{ marginTop: '1mm', borderTop: '0.5pt solid #e2e8f0', paddingTop: '0.8mm' }}>
-          {normalNumber && (
-            <div style={{ fontSize: '7pt', fontFamily: 'monospace', lineHeight: 1.3, color: '#166534' }}>
-              <span style={{ fontWeight: 700 }}>WhatsApp: </span>
-              {formatPhoneNumber(normalNumber)}
+      <div className="lb-lines">
+        {lines.length === 0 && <div className="lb-empty">Sem números cadastrados</div>}
+        {lines.map((l) => (
+          <div key={l.id} className="lb-line">
+            <div className="lb-key">
+              <div className="lb-key-label">{l.label}</div>
+              {(l.carrier || l.tag) && <div className="lb-key-sub">{[l.carrier, l.tag].filter(Boolean).join(' · ')}</div>}
             </div>
-          )}
-          {businessNumber && (
-            <div style={{ fontSize: '7pt', fontFamily: 'monospace', lineHeight: 1.3, color: '#0f766e' }}>
-              <span style={{ fontWeight: 700 }}>Business: </span>
-              {formatPhoneNumber(businessNumber)}
+            <div className="lb-num">{l.number}</div>
+            <div className="lb-badges">
+              {l.isNormal && <span className="lb-badge">WA</span>}
+              {l.isBusiness && <span className="lb-badge lb-badge-dark">WB</span>}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
+
+      {owners.length > 0 && <div className="lb-foot">{owners.join(' · ')}</div>}
     </div>
   );
 };
 
 export const LabelsView: React.FC = () => {
-  const { phones } = useStore();
+  const { phones, numbers, departmentById } = useStore();
   const loaded = true;
   const [margins, setMargins] = useState<PageMargins>(DEFAULT_MARGINS);
   const [gapRowCm, setGapRowCm] = useState(DEFAULT_GAP_CM);
@@ -247,6 +312,11 @@ export const LabelsView: React.FC = () => {
     [phones, selectedIds]
   );
   const labelsPerPage = columns * rows;
+  // Tamanho real de cada etiqueta na folha, em mm.
+  const labelWmm = (A4_WIDTH_MM - (margins.left + margins.right) * 10 - (columns - 1) * gapColCm * 10) / columns;
+  const labelHmm = (A4_HEIGHT_MM - (margins.top + margins.bottom) * 10 - (rows - 1) * gapRowCm * 10) / rows;
+  const baseScale = Math.max(0.8, Math.min(1.6, Math.min(labelWmm / REF_W_MM, labelHmm / REF_H_MM)));
+  const fmtMm = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   const pages = useMemo(() => chunk(printablePhones, labelsPerPage), [printablePhones, labelsPerPage]);
 
   return (
@@ -283,14 +353,95 @@ export const LabelsView: React.FC = () => {
         }
 
         .label-cell {
-          border: 3pt solid #94a3b8;
-          border-radius: 3mm;
+          --fit: 1;
+          border: 2pt solid #94a3b8;
+          border-radius: 2.5mm;
           background: transparent;
-          padding: 2.5mm 3mm;
+          padding: 1.6mm 2.2mm;
           display: flex;
           flex-direction: column;
-          justify-content: center;
+          justify-content: space-between;
+          gap: calc(0.8mm * var(--fit));
           overflow: hidden;
+          color: #000;
+          font-family: Arial, Helvetica, sans-serif;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .lb-head { min-width: 0; }
+        .lb-name {
+          font-size: calc(10.5pt * var(--fit));
+          font-weight: 800;
+          line-height: 1.1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .lb-model {
+          font-size: calc(7pt * var(--fit));
+          font-weight: 600;
+          line-height: 1.15;
+          color: #333;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .lb-lines {
+          display: flex;
+          flex-direction: column;
+          gap: calc(0.7mm * var(--fit));
+          border-top: 0.6pt solid #000;
+          padding-top: calc(0.8mm * var(--fit));
+        }
+        .lb-line {
+          display: grid;
+          grid-template-columns: minmax(0, auto) 1fr auto;
+          align-items: center;
+          column-gap: calc(1.4mm * var(--fit));
+        }
+        .lb-key { max-width: calc(17mm * var(--fit)); min-width: 0; line-height: 1.05; }
+        .lb-key-label {
+          font-size: calc(6.5pt * var(--fit));
+          font-weight: 800;
+          text-transform: uppercase;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .lb-key-sub {
+          font-size: calc(6pt * var(--fit));
+          font-weight: 600;
+          color: #333;
+          text-transform: uppercase;
+          line-height: 1.05;
+        }
+        .lb-num {
+          font-size: calc(11pt * var(--fit));
+          font-weight: 800;
+          line-height: 1.1;
+          white-space: nowrap;
+          font-variant-numeric: tabular-nums;
+          letter-spacing: -0.01em;
+        }
+        .lb-badges { display: flex; gap: 0.6mm; }
+        .lb-badge {
+          font-size: calc(6.5pt * var(--fit));
+          font-weight: 800;
+          line-height: 1;
+          padding: 0.5mm 0.8mm;
+          border: 0.8pt solid #000;
+          border-radius: 1mm;
+        }
+        .lb-badge-dark { background: #000; color: #fff; }
+        .lb-empty { font-size: calc(7pt * var(--fit)); font-style: italic; color: #333; }
+        .lb-foot {
+          font-size: calc(6.5pt * var(--fit));
+          font-weight: 700;
+          text-transform: uppercase;
+          color: #222;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .ruler-range {
@@ -440,7 +591,7 @@ export const LabelsView: React.FC = () => {
             <div>
               <h1 className="text-[26px] font-semibold tracking-tight text-zinc-900 sm:text-3xl">Etiquetas</h1>
               <p className="mt-0.5 text-sm text-zinc-500">
-                A4 · grade {columns}×{rows} · {printablePhones.length} de {phones.length} selecionados ·{' '}
+                A4 · grade {columns}×{rows} · etiqueta {fmtMm(labelWmm)} × {fmtMm(labelHmm)} mm · {printablePhones.length} de {phones.length} selecionados ·{' '}
                 {pages.length || 0} página{pages.length === 1 ? '' : 's'}
               </p>
             </div>
@@ -591,7 +742,13 @@ export const LabelsView: React.FC = () => {
                 ref={pageIndex === 0 ? pageRef : undefined}
               >
                 {pagePhones.map((phone) => (
-                  <Label key={phone.id} phone={phone} />
+                  <Label
+                    key={phone.id}
+                    phone={phone}
+                    records={numbers}
+                    department={phone.departmentId ? departmentById.get(phone.departmentId)?.name : undefined}
+                    baseScale={baseScale}
+                  />
                 ))}
                 {pageIndex === 0 && (
                   <MarginGuides
