@@ -1,4 +1,4 @@
-import { Phone } from './types';
+import { NumberKind, Phone } from './types';
 import { normalizeDigits } from './search';
 
 export type NumberSourceType = 'chip' | 'extra';
@@ -13,6 +13,7 @@ export interface NumberOccurrence {
   number: string;
   isNormal: boolean;
   isBusiness: boolean;
+  kind?: NumberKind;
 }
 
 // Uma linha da listagem de chips: um chip físico específico de um celular.
@@ -58,6 +59,7 @@ export function buildNumberIndex(phones: Phone[]): Map<string, NumberOccurrence[
         sourceType: 'extra',
         sourceId: extra.id,
         label: extra.label || 'Extra',
+        kind: extra.kind ?? 'whatsapp',
         number: extra.number,
         isNormal: phone.whatsapp.normal === extra.id,
         isBusiness: phone.whatsapp.business === extra.id,

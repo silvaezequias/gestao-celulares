@@ -1,10 +1,11 @@
 'use client';
 
 import React, { memo } from 'react';
-import { Phone } from '../../lib/phones/types';
+import { kindInfo, Phone } from '../../lib/phones/types';
 import { formatPhoneNumber } from '../../lib/phones/format';
+import { lastDigits } from '../../lib/phones/numbers';
 import { DevicePair } from '../device/DeviceThumb';
-import { Highlight, WaBadge } from '../ui/bits';
+import { Highlight, NumberSource, SourceBadge, WaBadge } from '../ui/bits';
 
 export interface NumberEntry {
   id: string;
@@ -12,17 +13,24 @@ export interface NumberEntry {
   number: string;
   isNormal: boolean;
   isBusiness: boolean;
-  extra: boolean;
+  source: NumberSource;
+  provider?: string;
 }
 
 export function phoneNumbers(phone: Phone): NumberEntry[] {
   return [
     ...phone.chips
       .filter((c) => c.number.trim())
-      .map((c) => ({ id: c.id, label: c.label || 'Chip', number: c.number, extra: false })),
+      .map((c) => ({ id: c.id, label: c.label || 'Chip', number: c.number, source: 'chip' as NumberSource })),
     ...phone.extraNumbers
       .filter((e) => e.number.trim())
-      .map((e) => ({ id: e.id, label: e.label || 'Extra', number: e.number, extra: true })),
+      .map((e) => ({
+        id: e.id,
+        label: e.label || kindInfo(e.kind).short,
+        number: e.number,
+        source: (e.kind ?? 'whatsapp') as NumberSource,
+        provider: e.provider,
+      })),
   ].map((n) => ({ ...n, isNormal: phone.whatsapp.normal === n.id, isBusiness: phone.whatsapp.business === n.id }));
 }
 
@@ -55,19 +63,27 @@ export const PhoneCard = memo(function PhoneCard({
         <p className="truncate text-xs text-zinc-500">
           {phone.model || 'Modelo não informado'}
           {departmentName && <span className="text-zinc-400"> · {departmentName}</span>}
+          {phone.chips.every((c) => !c.number.trim()) && numbers.length > 0 && (
+            <span className="text-zinc-400"> · sem chip</span>
+          )}
         </p>
 
         <div className="mt-2.5 space-y-1">
           {numbers.length === 0 && <p className="text-xs italic text-zinc-400">Sem números</p>}
           {numbers.map((n) => (
             <div key={n.id} className="flex min-w-0 items-center gap-2">
-              <span className="w-11 shrink-0 truncate text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+              <span className="w-11 min-w-0 shrink truncate text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
                 {n.label}
               </span>
-              <span className="truncate font-mono text-[13.5px] font-semibold tracking-tight text-zinc-800">
-                <Highlight text={formatPhoneNumber(n.number)} query={query} />
+              <span
+                className="shrink-0 font-mono text-[13.5px] font-semibold tracking-tight text-zinc-800"
+                title={formatPhoneNumber(n.number)}
+              >
+                <span className="text-zinc-300">••</span>
+                <Highlight text={lastDigits(n.number)} query={query} />
               </span>
-              <span className="ml-auto flex shrink-0 gap-1">
+              <span className="ml-auto flex min-w-0 shrink justify-end gap-1 overflow-hidden">
+                {n.source !== 'chip' && <SourceBadge source={n.source} />}
                 {n.isNormal && <WaBadge kind="normal" />}
                 {n.isBusiness && <WaBadge kind="business" />}
               </span>

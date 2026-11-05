@@ -20,12 +20,16 @@ type PhoneChip {
   carrier String?
 }
 
-// Número extra do celular (não ligado a nenhum chip físico), cadastrado só
-// pra poder ser escolhido como número do WhatsApp Normal/Business.
+// Número do celular que não é um chip físico.
+// kind: "whatsapp" (WhatsApp logado sem o chip neste aparelho), "api"
+// (número de WhatsApp API) ou "esim". Registros antigos sem kind são
+// tratados como "whatsapp". provider: provedor do número de API.
 type ExtraNumber {
-  id     String
-  label  String
-  number String
+  id       String
+  label    String
+  number   String
+  kind     String?
+  provider String?
 }
 
 // Guarda o id de um PhoneChip ou de um ExtraNumber (o pool de números
@@ -46,4 +50,20 @@ model Phone {
   departmentId String?       @db.ObjectId
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+}
+
+// Cadastro geral de números da empresa (chips, eSIMs, números de API,
+// fixos...), independente de estarem num celular. A ligação com os aparelhos
+// é feita pelos dígitos do número.
+model NumberRecord {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  number    String // só dígitos, com DDD
+  kind      String // chip | esim | api | fixo | whatsapp
+  carrier   String? // operadora
+  owner     String? // responsável / setor
+  plan      String? // pre | pos
+  recharges DateTime[] // datas de recarga (pré-pago)
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }

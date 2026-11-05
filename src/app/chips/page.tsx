@@ -1,5 +1,6 @@
-import { ChipsView } from '../../components/phones/ChipsView';
+import { redirect } from 'next/navigation';
 
+// A antiga aba "Chips" virou a aba "Números".
 export default function Page() {
-  return <ChipsView />;
+  redirect('/numeros');
 }

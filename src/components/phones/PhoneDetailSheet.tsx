@@ -9,7 +9,7 @@ import { buildNumberIndex, findOtherOccurrences } from '../../lib/phones/crossre
 import { resolveDevice } from '../../lib/phones/devices';
 import { DeviceThumb } from '../device/DeviceThumb';
 import { ConfirmSheet, Sheet } from '../ui/Sheet';
-import { WaBadge } from '../ui/bits';
+import { SourceBadge, WaBadge } from '../ui/bits';
 import { phoneNumbers } from './PhoneCard';
 
 export function CopyButton({ value }: { value: string }) {
@@ -83,10 +83,10 @@ export function PhoneDetailSheet({ phone, onClose, onEdit }: { phone: Phone; onC
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
                     {n.label}
-                    {n.extra && <span className="ml-1 normal-case tracking-normal">(número extra)</span>}
                   </p>
                   <p className="font-mono text-[17px] font-semibold tracking-tight text-zinc-900">{formatPhoneNumber(n.number)}</p>
                   <div className="mt-1 flex flex-wrap gap-1">
+                    <SourceBadge source={n.source} provider={n.provider} size="md" />
                     {n.isNormal && <WaBadge kind="normal" size="md" />}
                     {n.isBusiness && <WaBadge kind="business" size="md" />}
                     {others.length > 0 && (

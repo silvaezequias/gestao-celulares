@@ -3,7 +3,17 @@
 import React, { useMemo, useState } from 'react';
 import { Ban, Check, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../../lib/phones/store';
-import { ExtraNumber, Phone, PhoneChip, PhoneDraft, WhatsAppAssignments } from '../../lib/phones/types';
+import {
+  ExtraNumber,
+  kindInfo,
+  NUMBER_KINDS,
+  NumberKind,
+  Phone,
+  PhoneChip,
+  PhoneDraft,
+  WhatsAppAssignments,
+} from '../../lib/phones/types';
+import { KIND_ICONS } from '../ui/bits';
 import { maskPhoneNumber } from '../../lib/phones/format';
 import { CASE_COLOR_PRESETS, luminance, resolveDevice } from '../../lib/phones/devices';
 import { PHONE_MODELS } from '../../lib/phones/models';
@@ -91,7 +101,7 @@ export function PhoneFormSheet({
   const { departments, addPhone, updatePhone, addDepartment } = useStore();
   const [name, setName] = useState(initial?.name ?? '');
   const [model, setModel] = useState(initial?.model ?? '');
-  const [chips, setChips] = useState<PhoneChip[]>(initial?.chips?.length ? initial.chips : [{ id: uid(), label: 'Chip 1', number: '' }]);
+  const [chips, setChips] = useState<PhoneChip[]>(initial ? initial.chips : [{ id: uid(), label: 'Chip 1', number: '' }]);
   const [extras, setExtras] = useState<ExtraNumber[]>(initial?.extraNumbers ?? []);
   const [whatsapp, setWhatsapp] = useState<WhatsAppAssignments>(initial?.whatsapp ?? {});
   const [caseColor, setCaseColor] = useState<string | undefined>(initial?.caseColor);
@@ -103,18 +113,22 @@ export function PhoneFormSheet({
   const spec = resolveDevice(model);
   const seed = `${name}-${model}`;
 
-  const setChipCount = (count: 1 | 2) => {
-    if (count === 1 && chips.length > 1) {
-      const removed = chips[1].id;
-      setChips([chips[0]]);
-      setWhatsapp((w) => ({
-        normal: w.normal === removed ? undefined : w.normal,
-        business: w.business === removed ? undefined : w.business,
-      }));
-    } else if (count === 2 && chips.length === 1) {
-      setChips([chips[0], { id: uid(), label: 'Chip 2', number: '' }]);
-    }
+  const setChipCount = (count: 0 | 1 | 2) => {
+    const next = [...chips.slice(0, count)];
+    while (next.length < count) next.push({ id: uid(), label: `Chip ${next.length + 1}`, number: '' });
+    const removed = new Set(chips.slice(count).map((c) => c.id));
+    setChips(next);
+    setWhatsapp((w) => ({
+      normal: w.normal && removed.has(w.normal) ? undefined : w.normal,
+      business: w.business && removed.has(w.business) ? undefined : w.business,
+    }));
   };
+
+  const addExtra = (kind: NumberKind) =>
+    setExtras((prev) => [...prev, { id: uid(), label: '', number: '', kind }]);
+
+  const updateExtra = (id: string, patch: Partial<ExtraNumber>) =>
+    setExtras((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
 
   const toggleWa = (kind: 'normal' | 'business', id: string) =>
     setWhatsapp((w) => ({ ...w, [kind]: w[kind] === id ? undefined : id }));
@@ -133,14 +147,21 @@ export function PhoneFormSheet({
     const filledExtras = extras.filter((x) => x.number.trim());
     if (!name.trim()) return setError('Dê um nome para identificar este celular.');
     if (!model.trim()) return setError('Informe o modelo do celular.');
-    if (filledChips.length === 0) return setError('Cadastre pelo menos um número de chip.');
+    if (filledChips.length === 0 && filledExtras.length === 0)
+      return setError('Cadastre pelo menos um número (chip, eSIM, WhatsApp sem chip ou API).');
 
     const pool = new Set([...filledChips, ...filledExtras].map((n) => n.id));
     const draft: PhoneDraft = {
       name: name.trim(),
       model: model.trim(),
       chips,
-      extraNumbers: filledExtras.map((x) => ({ ...x, label: x.label.trim() })),
+      extraNumbers: filledExtras.map((x) => ({
+        id: x.id,
+        label: x.label.trim(),
+        number: x.number,
+        kind: x.kind ?? 'whatsapp',
+        ...(x.kind === 'api' && x.provider?.trim() ? { provider: x.provider.trim() } : {}),
+      })),
       whatsapp: {
         normal: whatsapp.normal && pool.has(whatsapp.normal) ? whatsapp.normal : undefined,
         business: whatsapp.business && pool.has(whatsapp.business) ? whatsapp.business : undefined,
@@ -304,20 +325,25 @@ export function PhoneFormSheet({
           <div className="mb-2 flex items-center justify-between">
             <label className="label mb-0">Chips</label>
             <div className="inline-flex rounded-full bg-zinc-100 p-0.5">
-              {[1, 2].map((n) => (
+              {[0, 1, 2].map((n) => (
                 <button
                   key={n}
                   type="button"
-                  onClick={() => setChipCount(n as 1 | 2)}
+                  onClick={() => setChipCount(n as 0 | 1 | 2)}
                   className={`rounded-full px-3.5 py-1 text-xs font-semibold transition ${
                     chips.length === n ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
                   }`}
                 >
-                  {n} chip{n > 1 ? 's' : ''}
+                  {n === 0 ? 'Sem chip' : `${n} chip${n > 1 ? 's' : ''}`}
                 </button>
               ))}
             </div>
           </div>
+          {chips.length === 0 && (
+            <p className="rounded-2xl bg-zinc-50 px-3.5 py-3 text-xs text-zinc-500 ring-1 ring-inset ring-zinc-100">
+              Aparelho sem chip físico. Cadastre abaixo os números usados nele (WhatsApp sem chip, API ou eSIM).
+            </p>
+          )}
           <div className="space-y-2">
             {chips.map((chip) => (
               <div key={chip.id} className="rounded-2xl bg-zinc-50 p-3 ring-1 ring-inset ring-zinc-100">
@@ -344,46 +370,83 @@ export function PhoneFormSheet({
         </div>
 
         <div>
-          <div className="mb-1 flex items-center justify-between">
-            <label className="label mb-0">Números extras</label>
-            <button
-              type="button"
-              onClick={() => setExtras((prev) => [...prev, { id: uid(), label: '', number: '' }])}
-              className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-semibold text-zinc-600 ring-1 ring-zinc-200 transition hover:bg-zinc-50"
-            >
-              <Plus className="h-3.5 w-3.5" /> Adicionar
-            </button>
+          <label className="label">Outros números</label>
+          <p className="mb-2 text-xs text-zinc-400">Números deste aparelho que não estão num chip físico.</p>
+          <div className="mb-2 grid grid-cols-3 gap-2">
+            {NUMBER_KINDS.map((k) => {
+              const Icon = KIND_ICONS[k.kind];
+              return (
+                <button
+                  key={k.kind}
+                  type="button"
+                  onClick={() => addExtra(k.kind)}
+                  className="flex flex-col items-center gap-1 rounded-2xl bg-white px-2 py-2.5 text-[12px] font-semibold text-zinc-700 ring-1 ring-zinc-200 transition hover:bg-zinc-50 active:scale-[0.98]"
+                >
+                  <span className="flex items-center gap-1">
+                    <Plus className="h-3 w-3 text-zinc-400" />
+                    <Icon className="h-4 w-4 text-zinc-500" />
+                  </span>
+                  {k.label}
+                </button>
+              );
+            })}
           </div>
-          <p className="mb-2 text-xs text-zinc-400">Quando o WhatsApp está logado num número que não é de nenhum chip deste aparelho.</p>
           <div className="space-y-2">
             {extras.map((x) => (
               <div key={x.id} className="rounded-2xl bg-zinc-50 p-3 ring-1 ring-inset ring-zinc-100">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="no-scrollbar flex gap-1 overflow-x-auto">
+                    {NUMBER_KINDS.map((k) => {
+                      const active = (x.kind ?? 'whatsapp') === k.kind;
+                      return (
+                        <button
+                          key={k.kind}
+                          type="button"
+                          onClick={() => updateExtra(x.id, { kind: k.kind })}
+                          className={`h-7 shrink-0 rounded-full px-2.5 text-[11px] font-semibold transition ${
+                            active ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-500 ring-1 ring-zinc-200'
+                          }`}
+                        >
+                          {k.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeExtra(x.id)}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-zinc-400 transition hover:bg-red-50 hover:text-red-600"
+                    aria-label="Remover número"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   <input
                     className="field w-28 shrink-0 sm:w-36"
                     value={x.label}
-                    onChange={(e) => setExtras((prev) => prev.map((v) => (v.id === x.id ? { ...v, label: e.target.value } : v)))}
-                    placeholder="Rótulo"
+                    onChange={(e) => updateExtra(x.id, { label: e.target.value })}
+                    placeholder={x.kind === 'api' ? 'Ex: Atendimento' : 'Rótulo'}
                   />
                   <input
                     type="tel"
                     inputMode="tel"
                     className="field font-mono"
                     value={x.number}
-                    onChange={(e) =>
-                      setExtras((prev) => prev.map((v) => (v.id === x.id ? { ...v, number: maskPhoneNumber(e.target.value) } : v)))
-                    }
+                    onChange={(e) => updateExtra(x.id, { number: maskPhoneNumber(e.target.value) })}
                     placeholder="Número"
                   />
-                  <button
-                    type="button"
-                    onClick={() => removeExtra(x.id)}
-                    className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-zinc-400 transition hover:bg-red-50 hover:text-red-600"
-                    aria-label="Remover número extra"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
                 </div>
+                {x.kind === 'api' && (
+                  <input
+                    className="field mt-2"
+                    value={x.provider ?? ''}
+                    onChange={(e) => updateExtra(x.id, { provider: e.target.value })}
+                    placeholder="Provedor (ex: Meta Cloud API, Z-API, Blip)"
+                    list="api-providers"
+                  />
+                )}
+                <p className="mt-1.5 text-[11px] text-zinc-400">{kindInfo(x.kind).hint}</p>
                 <div className="mt-2 flex gap-1.5">
                   <WaToggle kind="normal" active={whatsapp.normal === x.id} onClick={() => toggleWa('normal', x.id)} />
                   <WaToggle kind="business" active={whatsapp.business === x.id} onClick={() => toggleWa('business', x.id)} />
@@ -392,6 +455,12 @@ export function PhoneFormSheet({
             ))}
           </div>
         </div>
+
+        <datalist id="api-providers">
+          {['Meta Cloud API', 'Z-API', 'Evolution API', 'Blip', 'Twilio', 'Gupshup', '360dialog', 'Take Blip'].map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
 
         {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 sm:hidden">{error}</p>}
       </form>

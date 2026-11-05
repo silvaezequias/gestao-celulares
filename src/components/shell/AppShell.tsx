@@ -3,12 +3,12 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CardSim, Smartphone, Tags, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Hash, Smartphone, Tags, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useStore } from '../../lib/phones/store';
 
 const NAV = [
   { href: '/', label: 'Aparelhos', icon: Smartphone },
-  { href: '/chips', label: 'Chips', icon: CardSim },
+  { href: '/numeros', label: 'Números', icon: Hash },
   { href: '/etiquetas', label: 'Etiquetas', icon: Tags },
 ];
 

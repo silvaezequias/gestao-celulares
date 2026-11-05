@@ -1,8 +1,40 @@
 'use client';
 
 import React from 'react';
-import { Search, X } from 'lucide-react';
+import { CardSim, Cloud, Cpu, MessageCircle, Phone as PhoneIcon, Search, X } from 'lucide-react';
 import { findMatchRange } from '../../lib/phones/search';
+import { kindInfo, NumberKind } from '../../lib/phones/types';
+
+export const KIND_ICONS: Record<NumberKind, React.ElementType> = {
+  whatsapp: MessageCircle,
+  api: Cloud,
+  esim: Cpu,
+  fixo: PhoneIcon,
+};
+
+export type NumberSource = 'chip' | NumberKind;
+
+const SOURCE_STYLE: Record<NumberSource, string> = {
+  chip: 'bg-zinc-100 text-zinc-600',
+  whatsapp: 'bg-sky-50 text-sky-700 ring-1 ring-sky-600/15',
+  api: 'bg-violet-50 text-violet-700 ring-1 ring-violet-600/15',
+  esim: 'bg-orange-50 text-orange-700 ring-1 ring-orange-600/15',
+  fixo: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15',
+};
+
+// Selo que indica de onde vem o número (chip físico, eSIM, API...).
+export function SourceBadge({ source, provider, size = 'sm' }: { source: NumberSource; provider?: string; size?: 'sm' | 'md' }) {
+  const Icon = source === 'chip' ? CardSim : KIND_ICONS[source];
+  const label = source === 'chip' ? 'Chip' : kindInfo(source).short;
+  const cls = size === 'md' ? 'px-2 py-0.5 text-[11px]' : 'px-1.5 py-px text-[10px]';
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full font-semibold ${SOURCE_STYLE[source]} ${cls}`}>
+      <Icon className={size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'} />
+      {label}
+      {provider && <span className="font-medium opacity-70">· {provider}</span>}
+    </span>
+  );
+}
 
 export function Highlight({ text, query }: { text: string; query?: string }) {
   const range = query ? findMatchRange(text, query) : null;

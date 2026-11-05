@@ -25,12 +25,12 @@ export const viewport: Viewport = {
 export const revalidate = 3600;
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { phones, departments } = await getAppData();
+  const { phones, departments, numbers } = await getAppData();
 
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
       <body className="min-h-dvh font-sans">
-        <StoreProvider initialPhones={phones} initialDepartments={departments}>
+        <StoreProvider initialPhones={phones} initialDepartments={departments} initialNumbers={numbers}>
           <AppShell>{children}</AppShell>
         </StoreProvider>
       </body>

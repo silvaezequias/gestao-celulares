@@ -62,7 +62,10 @@ export function PhonesView() {
       .sort((a, b) => deptName(a).localeCompare(deptName(b), 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
   }, [searched, filter, deptKey, departmentById]);
 
-  const totalChips = useMemo(() => phones.reduce((n, p) => n + p.chips.filter((c) => c.number.trim()).length, 0), [phones]);
+  const totalNumbers = useMemo(
+    () => phones.reduce((n, p) => n + [...p.chips, ...p.extraNumbers].filter((c) => c.number.trim()).length, 0),
+    [phones]
+  );
   const openPhone = openId ? phones.find((p) => p.id === openId) ?? null : null;
   const onOpen = useCallback((p: Phone) => setOpenId(p.id), []);
 
@@ -90,7 +93,7 @@ export function PhonesView() {
         <div>
           <h1 className="text-[26px] font-semibold tracking-tight text-zinc-900 sm:text-3xl">Aparelhos</h1>
           <p className="mt-0.5 text-sm text-zinc-500">
-            {phones.length} {phones.length === 1 ? 'celular' : 'celulares'} · {totalChips} chips · {departments.length} departamentos
+            {phones.length} {phones.length === 1 ? 'celular' : 'celulares'} · {totalNumbers} números · {departments.length} departamentos
           </p>
         </div>
         <button onClick={() => setEditing('new')} className="btn-primary hidden md:inline-flex">

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { Department, Phone, PhoneDraft } from './types';
+import { Department, NumberRecord, NumberRecordDraft, Phone, PhoneDraft } from './types';
 
 // Estado global do app no cliente. Os dados iniciais já chegam prontos do
 // servidor (renderizados no HTML), então não existe mais a espera de um
@@ -13,7 +13,10 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
     ...options,
     headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
-  if (!res.ok) throw new Error(`Falha ao salvar (${res.status})`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? `Falha ao salvar (${res.status})`);
+  }
   return res.json();
 }
 
@@ -26,6 +29,10 @@ interface Toast {
 interface StoreValue {
   phones: Phone[];
   departments: Department[];
+  numbers: NumberRecord[];
+  addNumber: (draft: NumberRecordDraft) => Promise<NumberRecord>;
+  updateNumber: (id: string, draft: NumberRecordDraft) => Promise<NumberRecord>;
+  removeNumber: (id: string) => Promise<void>;
   departmentById: Map<string, Department>;
   addPhone: (draft: PhoneDraft) => Promise<Phone>;
   updatePhone: (id: string, draft: PhoneDraft) => Promise<Phone>;
@@ -42,14 +49,17 @@ const StoreContext = createContext<StoreValue | null>(null);
 export function StoreProvider({
   initialPhones,
   initialDepartments,
+  initialNumbers,
   children,
 }: {
   initialPhones: Phone[];
   initialDepartments: Department[];
+  initialNumbers: NumberRecord[];
   children: React.ReactNode;
 }) {
   const [phones, setPhones] = useState(initialPhones);
   const [departments, setDepartments] = useState(initialDepartments);
+  const [numbers, setNumbers] = useState(initialNumbers);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const notify = useCallback((message: string, tone: Toast['tone'] = 'ok') => {
@@ -142,9 +152,42 @@ export function StoreProvider({
     [guard]
   );
 
+  const addNumber = useCallback(
+    (draft: NumberRecordDraft) =>
+      guard(async () => {
+        const rec = await api<NumberRecord>('/api/numbers', { method: 'POST', body: JSON.stringify(draft) });
+        setNumbers((prev) => [...prev, rec]);
+        return rec;
+      }, 'Número cadastrado'),
+    [guard]
+  );
+
+  const updateNumber = useCallback(
+    (id: string, draft: NumberRecordDraft) =>
+      guard(async () => {
+        const rec = await api<NumberRecord>(`/api/numbers/${id}`, { method: 'PUT', body: JSON.stringify(draft) });
+        setNumbers((prev) => prev.map((n) => (n.id === id ? rec : n)));
+        return rec;
+      }, 'Número atualizado'),
+    [guard]
+  );
+
+  const removeNumber = useCallback(
+    (id: string) =>
+      guard(async () => {
+        await api(`/api/numbers/${id}`, { method: 'DELETE' });
+        setNumbers((prev) => prev.filter((n) => n.id !== id));
+      }, 'Número excluído'),
+    [guard]
+  );
+
   const value: StoreValue = {
     phones,
     departments,
+    numbers,
+    addNumber,
+    updateNumber,
+    removeNumber,
     departmentById,
     addPhone,
     updatePhone,
