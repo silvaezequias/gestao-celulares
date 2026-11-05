@@ -9,7 +9,7 @@ import { NumberSource } from '../ui/bits';
 import { phoneNumbers } from './PhoneCard';
 import { formatPhoneNumber } from '../../lib/phones/format';
 import { formatRelativeTime } from '../../lib/phones/relativeTime';
-import { bodyColorFor } from '../../lib/phones/devices';
+import { bodyColorFor, mix } from '../../lib/phones/devices';
 import { LABEL_PRESETS, LabelPreset } from '../../lib/phones/labelPresets';
 import { RulerSlider } from './RulerSlider';
 import { MarginGuides, MarginEdge, PageMargins } from './MarginGuides';
@@ -61,19 +61,18 @@ const REF_H_MM = 38.1;
 const MIN_FIT = 0.8;
 
 const SOURCE_TAG: Partial<Record<NumberSource, string>> = {
-  whatsapp: 'SEM CHIP',
+  whatsapp: 'Sem chip',
   api: 'API',
   esim: 'eSIM',
-  fixo: 'FIXO',
+  fixo: 'Fixo',
 };
+
+const titleCase = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
 interface LabelLine {
   id: string;
-  label: string;
   number: string;
-  carrier?: string;
-  owner?: string;
-  tag?: string;
+  caption: string;
   isNormal: boolean;
   isBusiness: boolean;
 }
@@ -82,15 +81,16 @@ function labelLines(phone: Phone, records: NumberRecord[]): LabelLine[] {
   return phoneNumbers(phone).map((n) => {
     const rec = records.find((r) => sameNumber(r.number, n.number));
     const chip = phone.chips.find((c) => c.id === n.id);
+    const carrier = chip?.carrier || rec?.carrier;
     const tag = n.source === 'api' && n.provider ? `API ${n.provider}` : SOURCE_TAG[n.source];
+    const caption = [n.label, tag && tag !== n.label ? tag : undefined, carrier && titleCase(carrier), rec?.owner && titleCase(rec.owner.trim())]
+      .filter(Boolean)
+      .join(' · ');
     return {
       id: n.id,
-      label: n.label,
       // número completo do cadastro quando o aparelho só tem o final
       number: formatPhoneNumber(rec && rec.number.length > n.number.replace(/\D/g, '').length ? rec.number : n.number),
-      carrier: (chip?.carrier || rec?.carrier)?.toUpperCase(),
-      owner: rec?.owner,
-      tag,
+      caption,
       isNormal: n.isNormal,
       isBusiness: n.isBusiness,
     };
@@ -106,12 +106,9 @@ const Label: React.FC<{
   const ref = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(baseScale);
   const lines = useMemo(() => labelLines(phone, records), [phone, records]);
-  const owners = [...new Map(lines.filter((l) => l.owner?.trim()).map((l) => [l.owner!.trim().toUpperCase(), l.owner!.trim()])).values()];
-  const borderColor = bodyColorFor(`${phone.name}-${phone.model}`, phone.caseColor);
+  const accent = bodyColorFor(`${phone.name}-${phone.model}`, phone.caseColor);
 
-  // Começa no tamanho proporcional à etiqueta e diminui até tudo caber
-  // (largura e altura) — etiquetas com 3 números ficam um pouco menores,
-  // etiquetas grandes ganham letra maior.
+  // Começa no tamanho proporcional à etiqueta e diminui até tudo caber.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -122,35 +119,39 @@ const Label: React.FC<{
       el.style.setProperty('--fit', String(s));
     }
     setFit(s);
-  }, [baseScale, lines, owners.length, department, phone.name, phone.model]);
+  }, [baseScale, lines, department, phone.name, phone.model]);
 
   return (
-    <div ref={ref} className="label-cell" style={{ borderColor, ['--fit' as string]: fit } as React.CSSProperties}>
+    <div
+      ref={ref}
+      className="label-cell"
+      style={{ ['--fit' as string]: fit, ['--accent' as string]: accent, ['--accent-soft' as string]: mix(accent, '#ffffff', 0.86) } as React.CSSProperties}
+    >
       <div className="lb-head">
-        <div className="lb-name">{phone.name}</div>
-        <div className="lb-model">
-          {[phone.model, department].filter(Boolean).join(' · ') || 'Modelo não informado'}
+        <span className="lb-dot" />
+        <div className="lb-title">
+          <div className="lb-name">{phone.name}</div>
+          <div className="lb-sub">{[phone.model, department].filter(Boolean).join(' · ') || 'Modelo não informado'}</div>
         </div>
       </div>
 
-      <div className="lb-lines">
+      <div className="lb-list">
         {lines.length === 0 && <div className="lb-empty">Sem números cadastrados</div>}
         {lines.map((l) => (
-          <div key={l.id} className="lb-line">
-            <div className="lb-key">
-              <div className="lb-key-label">{l.label}</div>
-              {(l.carrier || l.tag) && <div className="lb-key-sub">{[l.carrier, l.tag].filter(Boolean).join(' · ')}</div>}
+          <div key={l.id} className="lb-row">
+            <div className="lb-row-main">
+              <div className="lb-caption">{l.caption}</div>
+              <div className="lb-num">{l.number}</div>
             </div>
-            <div className="lb-num">{l.number}</div>
-            <div className="lb-badges">
-              {l.isNormal && <span className="lb-badge">WA</span>}
-              {l.isBusiness && <span className="lb-badge lb-badge-dark">WB</span>}
-            </div>
+            {(l.isNormal || l.isBusiness) && (
+              <div className="lb-pills">
+                {l.isNormal && <span className="lb-pill lb-pill-wa">WhatsApp</span>}
+                {l.isBusiness && <span className="lb-pill lb-pill-wb">Business</span>}
+              </div>
+            )}
           </div>
         ))}
       </div>
-
-      {owners.length > 0 && <div className="lb-foot">{owners.join(' · ')}</div>}
     </div>
   );
 };
@@ -354,95 +355,87 @@ export const LabelsView: React.FC = () => {
 
         .label-cell {
           --fit: 1;
-          border: 2pt solid #94a3b8;
-          border-radius: 2.5mm;
-          background: transparent;
-          padding: 1.6mm 2.2mm;
+          --accent: #a1a1aa;
+          --accent-soft: #f4f4f5;
+          position: relative;
+          border: 0.5pt solid #e4e4e7;
+          border-radius: 3mm;
+          background: #fff;
+          padding: calc(2mm * var(--fit)) calc(2.4mm * var(--fit));
           display: flex;
           flex-direction: column;
-          justify-content: space-between;
-          gap: calc(0.8mm * var(--fit));
+          gap: calc(1.4mm * var(--fit));
           overflow: hidden;
-          color: #000;
-          font-family: Arial, Helvetica, sans-serif;
+          color: #18181b;
+          font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, Arial, sans-serif;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
-        .lb-head { min-width: 0; }
+        .lb-head { display: flex; align-items: center; gap: calc(1.6mm * var(--fit)); min-width: 0; }
+        .lb-dot {
+          flex-shrink: 0;
+          width: calc(3.2mm * var(--fit));
+          height: calc(3.2mm * var(--fit));
+          border-radius: 999px;
+          background: var(--accent);
+          box-shadow: 0 0 0 calc(0.8mm * var(--fit)) var(--accent-soft);
+        }
+        .lb-title { min-width: 0; }
         .lb-name {
-          font-size: calc(10.5pt * var(--fit));
-          font-weight: 800;
+          font-size: calc(10pt * var(--fit));
+          font-weight: 650;
+          letter-spacing: -0.01em;
           line-height: 1.1;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .lb-model {
-          font-size: calc(7pt * var(--fit));
-          font-weight: 600;
-          line-height: 1.15;
-          color: #333;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .lb-lines {
-          display: flex;
-          flex-direction: column;
-          gap: calc(0.7mm * var(--fit));
-          border-top: 0.6pt solid #000;
-          padding-top: calc(0.8mm * var(--fit));
-        }
-        .lb-line {
-          display: grid;
-          grid-template-columns: minmax(0, auto) 1fr auto;
-          align-items: center;
-          column-gap: calc(1.4mm * var(--fit));
-        }
-        .lb-key { max-width: calc(17mm * var(--fit)); min-width: 0; line-height: 1.05; }
-        .lb-key-label {
+        .lb-sub {
           font-size: calc(6.5pt * var(--fit));
-          font-weight: 800;
-          text-transform: uppercase;
+          color: #52525b;
+          line-height: 1.2;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .lb-key-sub {
-          font-size: calc(6pt * var(--fit));
-          font-weight: 600;
-          color: #333;
-          text-transform: uppercase;
-          line-height: 1.05;
+        .lb-list { display: flex; flex-direction: column; gap: calc(0.9mm * var(--fit)); flex: 1; justify-content: center; }
+        .lb-row {
+          display: flex;
+          align-items: center;
+          gap: calc(1.2mm * var(--fit));
+          background: #f4f4f5;
+          border-radius: calc(2mm * var(--fit));
+          padding: calc(0.8mm * var(--fit)) calc(1.8mm * var(--fit));
+        }
+        .lb-row-main { flex: 1; min-width: 0; }
+        .lb-caption {
+          font-size: calc(5.8pt * var(--fit));
+          color: #52525b;
+          line-height: 1.15;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .lb-num {
           font-size: calc(11pt * var(--fit));
-          font-weight: 800;
-          line-height: 1.1;
+          font-weight: 650;
+          line-height: 1.12;
           white-space: nowrap;
           font-variant-numeric: tabular-nums;
-          letter-spacing: -0.01em;
+          letter-spacing: -0.005em;
         }
-        .lb-badges { display: flex; gap: 0.6mm; }
-        .lb-badge {
-          font-size: calc(6.5pt * var(--fit));
-          font-weight: 800;
+        .lb-pills { display: flex; flex-direction: column; align-items: flex-end; gap: calc(0.5mm * var(--fit)); }
+        .lb-pill {
+          font-size: calc(5.6pt * var(--fit));
+          font-weight: 600;
           line-height: 1;
-          padding: 0.5mm 0.8mm;
-          border: 0.8pt solid #000;
-          border-radius: 1mm;
-        }
-        .lb-badge-dark { background: #000; color: #fff; }
-        .lb-empty { font-size: calc(7pt * var(--fit)); font-style: italic; color: #333; }
-        .lb-foot {
-          font-size: calc(6.5pt * var(--fit));
-          font-weight: 700;
-          text-transform: uppercase;
-          color: #222;
+          padding: calc(0.6mm * var(--fit)) calc(1.3mm * var(--fit));
+          border-radius: 999px;
           white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
         }
+        .lb-pill-wa { background: #dcfce7; color: #166534; }
+        .lb-pill-wb { background: #e0e7ff; color: #3730a3; }
+        .lb-empty { font-size: calc(7pt * var(--fit)); color: #71717a; font-style: italic; }
 
         .ruler-range {
           -webkit-appearance: none;
