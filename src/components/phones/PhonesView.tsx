@@ -12,6 +12,23 @@ import { DepartmentsSheet } from './DepartmentsSheet';
 import { EmptyState, SearchField } from '../ui/bits';
 
 const ALL = '__all__';
+
+type WaFilter = 'all' | 'no-wa' | 'no-wb';
+
+const hasNumber = (p: Phone, id?: string) =>
+  !!id && [...p.chips, ...p.extraNumbers].some((n) => n.id === id && n.number.trim());
+
+const WA_FILTERS: { key: WaFilter; label: string; dot?: string }[] = [
+  { key: 'all', label: 'Todos' },
+  { key: 'no-wa', label: 'Sem WhatsApp', dot: 'bg-emerald-500' },
+  { key: 'no-wb', label: 'Sem Business', dot: 'bg-teal-500' },
+];
+
+function matchesWa(p: Phone, f: WaFilter) {
+  if (f === 'no-wa') return !hasNumber(p, p.whatsapp.normal);
+  if (f === 'no-wb') return !hasNumber(p, p.whatsapp.business);
+  return true;
+}
 const NONE = '__none__';
 
 function normalizeText(value: string) {
@@ -23,6 +40,7 @@ export function PhonesView() {
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [filter, setFilter] = useState(ALL);
+  const [waFilter, setWaFilter] = useState<WaFilter>('all');
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Phone | 'new' | null>(null);
   const [managing, setManaging] = useState(false);
@@ -46,21 +64,26 @@ export function PhonesView() {
     );
   }, [phones, deferredQuery, departmentById]);
 
+  const inDept = useMemo(
+    () => searched.filter((p) => filter === ALL || deptKey(p) === filter),
+    [searched, filter, deptKey]
+  );
+
   const counts = useMemo(() => {
     const map = new Map<string, number>();
-    searched.forEach((p) => map.set(deptKey(p), (map.get(deptKey(p)) ?? 0) + 1));
+    searched.filter((p) => matchesWa(p, waFilter)).forEach((p) => map.set(deptKey(p), (map.get(deptKey(p)) ?? 0) + 1));
     return map;
-  }, [searched, deptKey]);
+  }, [searched, deptKey, waFilter]);
 
   // Lista única (sem seções por departamento — a maioria tem poucos
   // aparelhos e as seções deixavam a tela cheia de espaços vazios). O
   // departamento aparece no próprio card e a ordem agrupa por ele.
   const visible = useMemo(() => {
     const deptName = (p: Phone) => departmentById.get(p.departmentId ?? '')?.name ?? '￿';
-    return searched
-      .filter((p) => filter === ALL || deptKey(p) === filter)
+    return inDept
+      .filter((p) => matchesWa(p, waFilter))
       .sort((a, b) => deptName(a).localeCompare(deptName(b), 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
-  }, [searched, filter, deptKey, departmentById]);
+  }, [inDept, waFilter, departmentById]);
 
   const totalNumbers = useMemo(
     () => phones.reduce((n, p) => n + [...p.chips, ...p.extraNumbers].filter((c) => c.number.trim()).length, 0),
@@ -107,7 +130,7 @@ export function PhonesView() {
       </div>
 
       <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-        {filterChip(ALL, 'Todos', searched.length)}
+        {filterChip(ALL, 'Todos', searched.filter((p) => matchesWa(p, waFilter)).length)}
         {departments.map((d) => filterChip(d.id, d.name, counts.get(d.id) ?? 0))}
         {(counts.get(NONE) ?? 0) > 0 && filterChip(NONE, 'Sem departamento', counts.get(NONE))}
         <button
@@ -119,6 +142,21 @@ export function PhonesView() {
         </button>
       </div>
 
+      <div className="no-scrollbar -mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
+        {WA_FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setWaFilter(waFilter === f.key ? 'all' : f.key)}
+            className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition ${
+              waFilter === f.key ? 'bg-zinc-200 text-zinc-900' : 'text-zinc-500 hover:bg-zinc-100'
+            }`}
+          >
+            {f.dot && <span className={`h-1.5 w-1.5 rounded-full ${f.dot}`} />}
+            {f.label} <span className="tabular-nums text-zinc-400">{inDept.filter((p) => matchesWa(p, f.key)).length}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="mt-6 space-y-8">
         {phones.length === 0 ? (
           <EmptyState icon={Smartphone} title="Nenhum celular cadastrado ainda">
@@ -128,7 +166,7 @@ export function PhonesView() {
           </EmptyState>
         ) : visible.length === 0 ? (
           <EmptyState icon={Search} title="Nada encontrado">
-            {deferredQuery ? <>Nenhum celular corresponde a “{deferredQuery}”.</> : 'Nenhum celular neste departamento.'}
+            {deferredQuery ? <>Nenhum celular corresponde a “{deferredQuery}”.</> : waFilter !== 'all' ? 'Nenhum celular com esse filtro.' : 'Nenhum celular neste departamento.'}
           </EmptyState>
         ) : (
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">

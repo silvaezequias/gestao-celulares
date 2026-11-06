@@ -19,7 +19,27 @@ const KINDS: { kind: RecordKind; label: string }[] = [
 
 const kindLabel = (k: RecordKind) => (k === 'chip' ? 'Chip' : kindInfo(k).label);
 
-type StatusFilter = 'all' | 'nophone' | 'unregistered';
+type StatusFilter = 'all' | 'no-wa' | 'no-wb' | 'no-both' | 'nophone' | 'unregistered';
+
+const usedAsWa = (r: NumberRow) => r.usages.some((u) => u.isNormal);
+const usedAsWb = (r: NumberRow) => r.usages.some((u) => u.isBusiness);
+
+function matchesStatus(r: NumberRow, s: StatusFilter) {
+  switch (s) {
+    case 'no-wa':
+      return !usedAsWa(r);
+    case 'no-wb':
+      return !usedAsWb(r);
+    case 'no-both':
+      return !usedAsWa(r) && !usedAsWb(r);
+    case 'nophone':
+      return r.usages.length === 0;
+    case 'unregistered':
+      return !r.record;
+    default:
+      return true;
+  }
+}
 
 // ---------- Peças visuais ----------
 
@@ -77,8 +97,7 @@ export function NumbersView() {
   const list = useMemo(() => {
     const q = deferred.trim().toLowerCase();
     return byKind.filter((r) => {
-      if (status === 'nophone' && r.usages.length > 0) return false;
-      if (status === 'unregistered' && r.record) return false;
+      if (!matchesStatus(r, status)) return false;
       if (!q) return true;
       return (
         numberMatchesQuery(r.number, q) ||
@@ -89,10 +108,13 @@ export function NumbersView() {
     });
   }, [byKind, deferred, status]);
 
-  const statusFilters: { key: StatusFilter; label: string; count: number }[] = [
-    { key: 'all', label: 'Todos', count: byKind.length },
-    { key: 'nophone', label: 'Fora de aparelho', count: byKind.filter((r) => r.usages.length === 0).length },
-    { key: 'unregistered', label: 'Não cadastrados', count: byKind.filter((r) => !r.record).length },
+  const statusFilters: { key: StatusFilter; label: string; dots?: string[] }[] = [
+    { key: 'all', label: 'Todos' },
+    { key: 'no-wa', label: 'Sem WhatsApp', dots: ['bg-emerald-500'] },
+    { key: 'no-wb', label: 'Sem Business', dots: ['bg-teal-500'] },
+    { key: 'no-both', label: 'Sem WhatsApp e sem Business', dots: ['bg-emerald-500', 'bg-teal-500'] },
+    { key: 'nophone', label: 'Fora de aparelho' },
+    { key: 'unregistered', label: 'Não cadastrados' },
   ];
 
   const open = openKey ? rows.find((r) => r.key === openKey) ?? null : null;
@@ -136,12 +158,19 @@ export function NumbersView() {
         {statusFilters.map((f) => (
           <button
             key={f.key}
-            onClick={() => setStatus(f.key)}
+            onClick={() => setStatus(status === f.key ? 'all' : f.key)}
             className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition ${
               status === f.key ? 'bg-zinc-200 text-zinc-900' : 'text-zinc-500 hover:bg-zinc-100'
             }`}
           >
-            {f.label} <span className="text-zinc-400">{f.count}</span>
+            {f.dots && (
+              <span className="flex -space-x-0.5">
+                {f.dots.map((d) => (
+                  <span key={d} className={`h-1.5 w-1.5 rounded-full ring-1 ring-white ${d}`} />
+                ))}
+              </span>
+            )}
+            {f.label} <span className="tabular-nums text-zinc-400">{byKind.filter((r) => matchesStatus(r, f.key)).length}</span>
           </button>
         ))}
       </div>
